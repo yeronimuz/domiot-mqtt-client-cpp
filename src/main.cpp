@@ -29,6 +29,9 @@ MqttService mqttService;
 Device device;
 
 unsigned long ota_progress_millis = 0;
+float lastSentTemperature = 0.0;
+float lastSentBatteryLevel = 0.0;
+unsigned long lastMqttPublish = 0;
 
 String getTimestamp()
 {
@@ -72,112 +75,109 @@ void onOTAEnd(bool success)
 void setup()
 {
     Serial.begin(115200);
+    delay(1000);
+    Serial.println("\n\nStarting Domiot MQTT Client...");
 
     DomiotConfig config = DomiotConfig();
     WifiConfig wifiConfig = config.getWifiConfig();
     MqttConfig mqttConfig = config.getMqttConfig();
     device = config.getDevice();
 
+    // Setup web server routes before starting
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/plain", "Domiot Sensor update facility on /update."); });
+
+    // Setup ElegantOTA
+    ElegantOTA.begin(&server);
+    ElegantOTA.onStart(onOTAStart);
+    ElegantOTA.onProgress(onOTAProgress);
+    ElegantOTA.onEnd(onOTAEnd);
+
+    // Start the server immediately (before WiFi connects)
+    server.begin();
+    Serial.println("HTTP server started on port 80");
+
     if (strlen(wifiConfig.getWifiAccessPoint().c_str()) > 0)
     {
         Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
+        WiFi.mode(WIFI_STA);
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
+        Serial.println("WiFi connection initiated (non-blocking)");
 
         mqttService = MqttService(
             mqttConfig.getMqttBroker(),
             mqttConfig.getMqttUser(),
             mqttConfig.getMqttPassword(),
             &wifiClient);
-
-        int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < MAX_WIFI_RETRIES)
-        {
-            delay(500);
-            Serial.print(".");
-            attempts++;
-        }
-
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            Serial.println("\nWiFi Connected!");
-            Serial.println("IP Address: " + WiFi.localIP().toString());
-
-            server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-                      { request->send(200, "text/plain", "Hi! This is ElegantOTA AsyncDemo."); });
-
-            ElegantOTA.begin(&server); // Start ElegantOTA
-            // ElegantOTA callbacks
-            ElegantOTA.onStart(onOTAStart);
-            ElegantOTA.onProgress(onOTAProgress);
-            ElegantOTA.onEnd(onOTAEnd);
-
-            server.begin();
-            Serial.println("HTTP server started");
-            mqttService.connect();
-            mqttService.registerDevice(device);
-        }
-        else
-        {
-            Serial.printf("\nFailed to connect to WiFi after %d attempts\n", MAX_WIFI_RETRIES);
-            Serial.println("Shutting down...");
-            while (true)
-            {
-                delay(1000);
-            }
-        }
     }
+    else
+    {
+        Serial.println("No WiFi credentials configured - OTA available but no MQTT");
+    }
+    
+    Serial.println("Setup complete!");
 }
 
 void loop()
 {
-    bool isNewTemperaturePresent = false;
-    bool isNewBatteryLevelPresent = false;
-    JsonDocument jsonDoc;
-    long deviceId = device.deviceId;
-    // TODO: Set common data
-    /*
-     * {"sensorId":6,"timestamp":"2025-03-17T21:55:59.524164121","value":0.359}
-     */
-    float lastSentTemperature = 0.0;
-    float lastSentBatteryLevel = 0.0;
+    // OTA update handling - call this first
+    ElegantOTA.loop();
+    yield();
 
-    if (!mqttService.isConnected())
+    // Maintain WiFi connection
+    if (WiFi.status() == WL_CONNECTED)
     {
-        mqttService.connect();
-    }
-    mqttService.getClient().loop();
-
-    String timestamp = getTimestamp();
-    String payload = "{";
-    payload += "\"sensorId\":2,";
-    payload += "\"timestamp\":\"" + timestamp + "\",";
-    if (INCLUDE_TEMPERATURE_SENSOR)
-    {
-        float temperature = TemperatureSensor::readTemperature();
-        if (temperature != lastSentTemperature)
+        // MQTT client loop - non-blocking
+        if (!mqttService.isConnected())
         {
-            // TODO: set sensorId properly
-            lastSentTemperature = temperature;
-            payload += "\"value\":" + String(temperature, 2);
-            payload += "}";
-            mqttService.getClient().publish("sensor", payload.c_str());
+            mqttService.connect();
         }
-    }
-    if (INCLUDE_BATTERY_LEVEL_SENSOR)
-    {
-        float batteryLevel = BatteryLevel::readBatteryLevel();
-        if (batteryLevel != lastSentBatteryLevel)
+        mqttService.getClient().loop();
+
+        // Publish sensor data every 1 second
+        unsigned long now = millis();
+        if (now - lastMqttPublish >= 1000)
         {
-            lastSentBatteryLevel = batteryLevel;
-            payload += "\"value\":" + String(batteryLevel, 2);
-            payload += "}";
-            mqttService.getClient().publish("sensor", payload.c_str());
+            lastMqttPublish = now;
+
+            String timestamp = getTimestamp();
+            String payload = "{";
+            payload += "\"sensorId\":2,";
+            payload += "\"timestamp\":\"" + timestamp + "\",";
+            
+            if (INCLUDE_TEMPERATURE_SENSOR)
+            {
+                float temperature = TemperatureSensor::readTemperature();
+                if (temperature != lastSentTemperature)
+                {
+                    lastSentTemperature = temperature;
+                    payload += "\"value\":" + String(temperature, 2);
+                    payload += "}";
+                    mqttService.getClient().publish("sensor", payload.c_str());
+                }
+            }
+            else if (INCLUDE_BATTERY_LEVEL_SENSOR)
+            {
+                float batteryLevel = BatteryLevel::readBatteryLevel();
+                if (batteryLevel != lastSentBatteryLevel)
+                {
+                    lastSentBatteryLevel = batteryLevel;
+                    payload += "\"value\":" + String(batteryLevel, 2);
+                    payload += "}";
+                    mqttService.getClient().publish("sensor", payload.c_str());
+                }
+            }
+            else
+            {
+                payload += "\"value\": 0.0";
+                payload += "}";
+                mqttService.getClient().publish("sensor", payload.c_str());
+            }
         }
     }
     else
     {
-        payload += "\"value\": 0.0";
-        payload += "}";
-        mqttService.getClient().publish("sensor", payload.c_str());
+        // WiFi not connected - just yield to allow async operations
+        yield();
     }
 }
