@@ -9,6 +9,7 @@ void MqttService::connect()
 
         if (_mqttUser.length() > 0 && _mqttPassword.length() > 0 && _mqttServer.length() > 0)
         {
+            Serial.printf("Using MQTT config %s, %s\n", _mqttServer.c_str(), _mqttUser.c_str());
             if (_mqttClient.connect(_mqttServer.c_str(), _mqttUser.c_str(), _mqttPassword.c_str()))
             {
                 Serial.println("Connected!");

@@ -80,7 +80,7 @@ void setup()
 
     if (strlen(wifiConfig.getWifiAccessPoint().c_str()) > 0)
     {
-        Serial.println("Connecting to WiFi...");
+        Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
 
         mqttService = MqttService(

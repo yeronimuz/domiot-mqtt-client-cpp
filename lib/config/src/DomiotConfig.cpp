@@ -37,23 +37,23 @@ void DomiotConfig::getDomiotConfig()
     {
         _domiotJson = doc;
 
-        _wifiConfig = WifiConfig(doc["ssid"].as<String>(), doc["password"].as<String>());
+        _wifiConfig = WifiConfig(doc["wifi"]["ssid"].as<String>(), doc["wifi"]["password"].as<String>());
 
         _mqttConfig = MqttConfig(
-            doc["host"].as<String>(),
-            doc["port"].as<u_short>(),
-            doc["user"].as<String>(),
-            doc["password"].as<String>(),
-            doc["client_id"].as<String>());
+            doc["mqtt"]["host"].as<String>(),
+            doc["mqtt"]["port"].as<u_short>(),
+            doc["mqtt"]["user"].as<String>(),
+            doc["mqtt"]["password"].as<String>(),
+            doc["mqtt"]["client_id"].as<String>());
     }
 
     // Read device config from LittleFS when exists
     if (LittleFS.exists("/device_config.json"))
     {
-        File deviceFile = LittleFS.open("/device_config.json", "r");
+        File deviceFile = LittleFS.open("/device.json", "r");
         if (!deviceFile)
         {
-            Serial.println("Failed to open device_config.json for reading");
+            Serial.println("Failed to open device.json for reading");
             return;
         }
 
