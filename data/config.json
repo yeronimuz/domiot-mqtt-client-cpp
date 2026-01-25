@@ -1,0 +1,13 @@
+{
+  "wifi": {
+    "ssid": "MYSSID",
+    "password": "thekey"
+  },
+  "mqtt": {
+    "host": "192.168.1.10",
+    "port": 1883,
+    "user": "johndoe",
+    "password": "secret",
+    "client_id": "domiot-p1"
+  }
+}
