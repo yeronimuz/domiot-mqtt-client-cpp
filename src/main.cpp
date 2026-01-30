@@ -9,29 +9,32 @@
 #include <BatteryLevel.h>
 #include <MqttService.h>
 #include <DomiotConfig.h>
+#include <P1Reader.h>
+#include <P1Datagram.h>
 
 #define MAX_WIFI_RETRIES 20
 #define INCLUDE_TEMPERATURE_SENSOR false
 #define INCLUDE_BATTERY_LEVEL_SENSOR false
-
-/* Device's AP when not configured */
-const char *ssid = "TBD-SSID"; // AP SSID
-const char *password = "";     // No password
+#define SENSOR_VALUE_TOPIC "sensor"
 
 AsyncWebServer server(80);
 
 WiFiClient wifiClient;
+
+SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX, inverted)
 
 String deviceName = "ESP_Sensor";
 String deviceType = "TemperatureSensor";
 
 MqttService mqttService;
 Device device;
+long tempSensorId;
+long batterySensorId;
 
 unsigned long ota_progress_millis = 0;
 float lastSentTemperature = 0.0;
 float lastSentBatteryLevel = 0.0;
-unsigned long lastMqttPublish = 0;
+unsigned long lastSentMqttPublish = 0;
 
 String getTimestamp()
 {
@@ -114,7 +117,7 @@ void setup()
     {
         Serial.println("No WiFi credentials configured - OTA available but no MQTT");
     }
-    
+
     Serial.println("Setup complete!");
 }
 
@@ -134,46 +137,51 @@ void loop()
         }
         mqttService.getClient().loop();
 
-        // Publish sensor data every 1 second
         unsigned long now = millis();
-        if (now - lastMqttPublish >= 1000)
-        {
-            lastMqttPublish = now;
 
-            String timestamp = getTimestamp();
-            String payload = "{";
-            payload += "\"sensorId\":2,";
-            payload += "\"timestamp\":\"" + timestamp + "\",";
-            
-            if (INCLUDE_TEMPERATURE_SENSOR)
+        String timestamp = getTimestamp();
+        String payload;
+        payload += "{";
+        payload += "\"sensorId\": 0";
+        payload += "\"timestamp\": \"" + timestamp + "\", ";
+
+        if (INCLUDE_TEMPERATURE_SENSOR && now - lastSentMqttPublish >= 1000)
+        {
+            float temperature = TemperatureSensor::readTemperature();
+            if (temperature != lastSentTemperature)
             {
-                float temperature = TemperatureSensor::readTemperature();
-                if (temperature != lastSentTemperature)
-                {
-                    lastSentTemperature = temperature;
-                    payload += "\"value\":" + String(temperature, 2);
-                    payload += "}";
-                    mqttService.getClient().publish("sensor", payload.c_str());
-                }
-            }
-            else if (INCLUDE_BATTERY_LEVEL_SENSOR)
-            {
-                float batteryLevel = BatteryLevel::readBatteryLevel();
-                if (batteryLevel != lastSentBatteryLevel)
-                {
-                    lastSentBatteryLevel = batteryLevel;
-                    payload += "\"value\":" + String(batteryLevel, 2);
-                    payload += "}";
-                    mqttService.getClient().publish("sensor", payload.c_str());
-                }
-            }
-            else
-            {
-                payload += "\"value\": 0.0";
+                lastSentTemperature = temperature;
+                payload += "\"value\": " + String(temperature, 2);
                 payload += "}";
-                mqttService.getClient().publish("sensor", payload.c_str());
+                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
             }
         }
+        else if (INCLUDE_BATTERY_LEVEL_SENSOR && now - lastSentMqttPublish >= 1000)
+        {
+            float batteryLevel = BatteryLevel::readBatteryLevel();
+            if (batteryLevel != lastSentBatteryLevel)
+            {
+                lastSentBatteryLevel = batteryLevel;
+                payload += "\"value\": " + String(batteryLevel, 2);
+                payload += "}";
+                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+            }
+        }
+        else
+        {
+            // Read P1 data here
+            P1Datagram p1Datagram = P1Reader::readDatagram(mySerial);
+            // Map P1Datagram to SensorValues and publish
+            String* payloadParts = p1Datagram.getAsPayload();
+            for (int i = 0; i < MAX_P1_ITEMS && payloadParts[i][0] != 0; i++)
+            {
+                payload += payloadParts[i];
+                payload += "}";
+                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+            }
+            delete[] payloadParts;
+        }
+        lastSentMqttPublish = now;
     }
     else
     {

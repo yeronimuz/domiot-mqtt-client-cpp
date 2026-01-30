@@ -15,7 +15,7 @@ public:
     Topic(const String &type, const String &path) : type(type), path(path) {}
 };
 
-class SensorParameter
+class ConfigParameter
 {
 public:
     String name;
@@ -23,7 +23,7 @@ public:
     JsonVariant value;
     bool readonly;
 
-    SensorParameter() = default;
+    ConfigParameter() = default;
 };
 
 class Sensor
@@ -33,20 +33,21 @@ public:
     String deviceMac;
     Topic topic;
     String type;
-    std::vector<SensorParameter> parameters;
+    std::vector<ConfigParameter> parameters;
 
     Sensor() = default;
 };
 
-class DeviceParameter
+class Actuator
 {
 public:
-    String name;
-    String parameterType;
-    JsonVariant value;
-    bool readonly;
+    int actuatorId;
+    String deviceMac;
+    Topic topic;
+    String type;
+    std::vector<ConfigParameter> parameters;
 
-    DeviceParameter() = default;
+    Actuator() = default;
 };
 
 class Device
@@ -58,8 +59,9 @@ public:
     String firmwareVersion;
     String hardwareVersion;
     String macAddress;
-    std::vector<DeviceParameter> parameters;
+    std::vector<ConfigParameter> parameters;
     std::vector<Sensor> sensors;
+    std::vector<Actuator> actuators;
 
     Device() = default;
 

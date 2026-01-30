@@ -14,7 +14,7 @@ Device Device::fromJson(const JsonObject& json) {
     JsonArray paramsArray = json["parameters"];
     if (!paramsArray.isNull()) {
         for (JsonObject paramObj : paramsArray) {
-            DeviceParameter param;
+            ConfigParameter param;
             param.name = paramObj["name"] | "";
             param.parameterType = paramObj["parameterType"] | "";
             param.value = paramObj["value"];
@@ -43,7 +43,7 @@ Device Device::fromJson(const JsonObject& json) {
             JsonArray sensorParamsArray = sensorObj["parameters"];
             if (!sensorParamsArray.isNull()) {
                 for (JsonObject paramObj : sensorParamsArray) {
-                    SensorParameter param;
+                    ConfigParameter param;
                     param.name = paramObj["name"] | "";
                     param.parameterType = paramObj["parameterType"] | "";
                     param.value = paramObj["value"];
