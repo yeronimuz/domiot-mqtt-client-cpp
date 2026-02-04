@@ -26,7 +26,7 @@ SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX, inverted)
 String deviceName = "ESP_Sensor";
 String deviceType = "TemperatureSensor";
 
-MqttService mqttService;
+MqttService* mqttService = nullptr;
 Device device;
 long tempSensorId;
 long batterySensorId;
@@ -38,13 +38,15 @@ unsigned long lastSentMqttPublish = 0;
 
 String getTimestamp()
 {
-    // Format timestamp as ISO 8601: "2025-03-17T21:55:59.524164121"
+    // Format timestamp as ISO 8601: "2025-03-17T21:55:59.524"
     time_t now = time(nullptr);
     struct tm *timeinfo = localtime(&now);
     char timestamp_buffer[30];
     strftime(timestamp_buffer, sizeof(timestamp_buffer), "%Y-%m-%dT%H:%M:%S", timeinfo);
     unsigned long milliseconds = millis() % 1000;
-    return String(timestamp_buffer) + "." + String(milliseconds * 1000000, DEC);
+    char ms_buffer[4];
+    sprintf(ms_buffer, "%03lu", milliseconds);
+    return String(timestamp_buffer) + "." + String(ms_buffer);
 }
 
 void onOTAStart()
@@ -72,7 +74,6 @@ void onOTAEnd(bool success)
     {
         Serial.println("There was an error during OTA update!");
     }
-    // <Add your own code here>
 }
 
 void setup()
@@ -107,11 +108,29 @@ void setup()
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
         Serial.println("WiFi connection initiated (non-blocking)");
 
-        mqttService = MqttService(
+        mqttService = new MqttService(
             mqttConfig.getMqttBroker(),
             mqttConfig.getMqttUser(),
             mqttConfig.getMqttPassword(),
             &wifiClient);
+        Serial.print("Connecting to MQTT ");
+        while (!mqttService->isConnected())
+        {
+            mqttService->connect();
+            delay(500);
+        }
+        Serial.println("\nMQTT connected!");
+        
+        if (device._deviceId == 0)
+        {
+            Serial.println("No device ID configured, registering device...");
+            mqttService->registerDevice(device);
+        }
+        else
+        {
+            Serial.printf("Using configured device ID: %ld\n", device._deviceId);
+        }
+
     }
     else
     {
@@ -131,18 +150,18 @@ void loop()
     if (WiFi.status() == WL_CONNECTED)
     {
         // MQTT client loop - non-blocking
-        if (!mqttService.isConnected())
+        if (!mqttService->isConnected())
         {
-            mqttService.connect();
+            mqttService->connect();
         }
-        mqttService.getClient().loop();
+        mqttService->getClient().loop();
 
         unsigned long now = millis();
 
         String timestamp = getTimestamp();
         String payload;
         payload += "{";
-        payload += "\"sensorId\": 0";
+        payload += "\"sensorId\": 0, ";
         payload += "\"timestamp\": \"" + timestamp + "\", ";
 
         if (INCLUDE_TEMPERATURE_SENSOR && now - lastSentMqttPublish >= 1000)
@@ -153,7 +172,7 @@ void loop()
                 lastSentTemperature = temperature;
                 payload += "\"value\": " + String(temperature, 2);
                 payload += "}";
-                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
             }
         }
         else if (INCLUDE_BATTERY_LEVEL_SENSOR && now - lastSentMqttPublish >= 1000)
@@ -164,7 +183,7 @@ void loop()
                 lastSentBatteryLevel = batteryLevel;
                 payload += "\"value\": " + String(batteryLevel, 2);
                 payload += "}";
-                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
             }
         }
         else
@@ -177,7 +196,7 @@ void loop()
             {
                 payload += payloadParts[i];
                 payload += "}";
-                mqttService.getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
             }
             delete[] payloadParts;
         }

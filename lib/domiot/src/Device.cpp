@@ -1,25 +1,57 @@
 #include "Device.h"
 
+enum class ParamType {
+    INT,
+    FLOAT,
+    BOOL,
+    STRING
+};
+
+static ParamType getParamType(const String& typeStr) {
+    if (typeStr == "int" || typeStr == "integer") return ParamType::INT;
+    if (typeStr == "float" || typeStr == "double") return ParamType::FLOAT;
+    if (typeStr == "bool" || typeStr == "boolean") return ParamType::BOOL;
+
+    return ParamType::STRING;
+}
+
 Device Device::fromJson(const JsonObject& json) {
-    Device device;
+    Device device = Device();
     
-    device.deviceId = json["deviceId"] | 0;
-    device.manufacturerId = json["manufacturerId"].isNull() ? "" : json["manufacturerId"].as<String>();
-    device.modelId = json["modelId"].isNull() ? "" : json["modelId"].as<String>();
-    device.firmwareVersion = json["firmwareVersion"].isNull() ? "" : json["firmwareVersion"].as<String>();
-    device.hardwareVersion = json["hardwareVersion"] | "";
-    device.macAddress = json["macAddress"] | "";
+    device._deviceId = json["deviceId"] | 0;
+    device._manufacturerId = json["manufacturerId"] | "";
+    device._modelId = json["modelId"] | "";
+    device._firmwareVersion = json["firmwareVersion"] | "";
+    device._hardwareVersion = json["hardwareVersion"] | "";
+    device._macAddress = json["macAddress"] | "";
 
     // Parse parameters
     JsonArray paramsArray = json["parameters"];
     if (!paramsArray.isNull()) {
         for (JsonObject paramObj : paramsArray) {
             ConfigParameter param;
-            param.name = paramObj["name"] | "";
-            param.parameterType = paramObj["parameterType"] | "";
-            param.value = paramObj["value"];
-            param.readonly = paramObj["readonly"] | false;
-            device.parameters.push_back(param);
+            param._name = paramObj["name"] | "";
+            param._parameterType = paramObj["parameterType"] | "";
+            
+            // Parse value based on type
+            switch (getParamType(param._parameterType)) {
+                case ParamType::INT:
+                    param._value = paramObj["value"].as<int>();
+                    break;
+                case ParamType::FLOAT:
+                    param._value = paramObj["value"].as<float>();
+                    break;
+                case ParamType::BOOL:
+                    param._value = paramObj["value"].as<bool>();
+                    break;
+                case ParamType::STRING:
+                default:
+                    param._value = String(paramObj["value"].as<const char*>());
+                    break;
+            }
+            
+            param._readonly = paramObj["readonly"] | false;
+            device._parameters.push_back(param);
         }
     }
 
@@ -27,32 +59,49 @@ Device Device::fromJson(const JsonObject& json) {
     JsonArray sensorsArray = json["sensors"];
     if (!sensorsArray.isNull()) {
         for (JsonObject sensorObj : sensorsArray) {
-            Sensor sensor;
-            sensor.sensorId = sensorObj["sensorId"] | 0;
-            sensor.deviceMac = sensorObj["deviceMac"].isNull() ? "" : sensorObj["deviceMac"].as<String>();
-            sensor.type = sensorObj["type"] | "";
+            Sensor sensor(sensorObj["sensorId"] | 0,
+                sensorObj["deviceMac"] | "",
+                SensorType::getType(sensorObj["type"] | "").value_or(SensorType::NOT_USED)
+            );
 
             // Parse topic
             JsonObject topicObj = sensorObj["topic"];
             if (!topicObj.isNull()) {
-                sensor.topic.type = topicObj["type"] | "";
-                sensor.topic.path = topicObj["path"] | "";
+                sensor._topic._type = topicObj["type"] | "";
+                sensor._topic._path = topicObj["path"] | "";
             }
 
             // Parse sensor parameters
             JsonArray sensorParamsArray = sensorObj["parameters"];
             if (!sensorParamsArray.isNull()) {
                 for (JsonObject paramObj : sensorParamsArray) {
-                    ConfigParameter param;
-                    param.name = paramObj["name"] | "";
-                    param.parameterType = paramObj["parameterType"] | "";
-                    param.value = paramObj["value"];
-                    param.readonly = paramObj["readonly"] | false;
-                    sensor.parameters.push_back(param);
+                    ConfigParameter param = ConfigParameter();
+                    param._name = paramObj["name"] | "";
+                    param._parameterType = paramObj["parameterType"] | "";
+                    
+                    // Parse value based on type
+                    switch (getParamType(param._parameterType)) {
+                        case ParamType::INT:
+                            param._value = paramObj["value"].as<int>();
+                            break;
+                        case ParamType::FLOAT:
+                            param._value = paramObj["value"].as<float>();
+                            break;
+                        case ParamType::BOOL:
+                            param._value = paramObj["value"].as<bool>();
+                            break;
+                        case ParamType::STRING:
+                        default:
+                            param._value = String(paramObj["value"].as<const char*>());
+                            break;
+                    }
+                    
+                    param._readonly = paramObj["readonly"] | false;
+                    sensor._parameters.push_back(param);
                 }
             }
 
-            device.sensors.push_back(sensor);
+            device._sensors.push_back(sensor);
         }
     }
 
@@ -69,6 +118,5 @@ void Device::writeDeviceJson(JsonDocument& doc)
 
     serializeJson(doc, file);
 
-    file.close();
     Serial.println("device_config.json written");
 }

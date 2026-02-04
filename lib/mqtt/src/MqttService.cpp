@@ -23,7 +23,7 @@ void MqttService::connect()
         {
             Serial.println("No MQTT credentials provided, trying anonymous connection...");
             char deviceIdStr[10];
-            ltoa(_device.deviceId, deviceIdStr, 10);
+            ltoa(_device._deviceId, deviceIdStr, 10);
             if (_mqttClient.connect(deviceIdStr))
             {
                 Serial.println("Connected!");
@@ -56,7 +56,7 @@ void MqttService::registerDevice(Device device)
     String payload;
     serializeJson(doc, payload);
     isRegistered = _mqttClient.publish("register", (byte *)payload.c_str(), payload.length());
-    Serial.print("Device registration ");;
+    Serial.print("Device registration ");
     Serial.println(isRegistered ? "succeeded" : "failed");
 }
 
@@ -78,9 +78,13 @@ void MqttService::callback(char *topic, byte *payload, unsigned int length)
             Serial.println(error.c_str());
             return;
         }
-        _device = Device::fromJson(doc.as<JsonObject>());
-        Serial.printf("Device ID:  %ld\n", _device.deviceId);
+        
+        // Write to file FIRST, before creating device object
         Device::writeDeviceJson(doc);
+        
+        // Now create device from JSON
+        _device = Device::fromJson(doc.as<JsonObject>());
+        Serial.printf("Device ID:  %ld\n", _device._deviceId);
     }
 
 }

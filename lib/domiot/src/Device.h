@@ -4,64 +4,24 @@
 #include <ArduinoJson.h>
 #include <vector>
 #include <LittleFS.h>
+#include "SensorType.h"
+#include "ConfigParameter.h"
+#include "Sensor.h"
+#include "Actuator.h"
 
-class Topic
-{
-public:
-    String type;
-    String path;
-
-    Topic() = default;
-    Topic(const String &type, const String &path) : type(type), path(path) {}
-};
-
-class ConfigParameter
-{
-public:
-    String name;
-    String parameterType;
-    JsonVariant value;
-    bool readonly;
-
-    ConfigParameter() = default;
-};
-
-class Sensor
-{
-public:
-    int sensorId;
-    String deviceMac;
-    Topic topic;
-    String type;
-    std::vector<ConfigParameter> parameters;
-
-    Sensor() = default;
-};
-
-class Actuator
-{
-public:
-    int actuatorId;
-    String deviceMac;
-    Topic topic;
-    String type;
-    std::vector<ConfigParameter> parameters;
-
-    Actuator() = default;
-};
 
 class Device
 {
 public:
-    long deviceId;
-    String manufacturerId;
-    String modelId;
-    String firmwareVersion;
-    String hardwareVersion;
-    String macAddress;
-    std::vector<ConfigParameter> parameters;
-    std::vector<Sensor> sensors;
-    std::vector<Actuator> actuators;
+    long _deviceId;
+    String _manufacturerId;
+    String _modelId;
+    String _firmwareVersion;
+    String _hardwareVersion;
+    String _macAddress;
+    std::vector<ConfigParameter> _parameters;
+    std::vector<Sensor> _sensors;
+    std::vector<Actuator> _actuators;
 
     Device() = default;
 

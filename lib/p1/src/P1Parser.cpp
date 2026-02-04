@@ -42,70 +42,70 @@ P1Datagram P1Parser::parse(const String &p1Message)
             switch (p1Standard.getId())
             {
             case VERSION_INFO:
-                datagram.versionInfo = static_cast<byte>(data.toInt());
+                datagram.setVersionInfo(static_cast<byte>(data.toInt()));
                 break;
             case DATE_TIMESTAMP:
-                datagram.timestamp = data;
+                datagram.setTimestamp(data);
                 break;
             case EQUIPMENT_ID_01:
             case EQUIPMENT_ID_00:
-                datagram.equipmentId = data;
+                datagram.setEquipmentId(data);
                 break;
             case CONS_PWR_TARIFF_1:
-                datagram.consumedPowerT1 = data.toDouble();
+                datagram.setConsumedPowerT1(data.toDouble());
                 break;
             case CONS_PWR_TARIFF_2:
-                datagram.consumedPowerT2 = data.toDouble();
+                datagram.setConsumedPowerT2(data.toDouble());
                 break;
             case PROD_PWR_TARIFF_1:
-                datagram.producedPowerT1 = data.toDouble();
+                datagram.setProducedPowerT1(data.toDouble());
                 break;
             case PROD_PWR_TARIFF_2:
-                datagram.producedPowerT2 = data.toDouble();
+                datagram.setProducedPowerT2(data.toDouble());
                 break;
             case CURRENT_TARIFF:
-                datagram.currentTariff = static_cast<byte>(data.toInt());
+                datagram.setCurrentTariff(static_cast<byte>(data.toInt()));
                 break;
             case ACT_PWR_CONSUMED:
-                datagram.actualPowerConsumed = data.toDouble();
+                datagram.setActualPowerConsumed(data.toDouble());
                 break;
             case ACT_PWR_PRODUCED:
-                datagram.actualPowerProduced = data.toDouble();
+                datagram.setActualPowerProduced(data.toDouble());
                 break;
             case PWR_FAILS_ANY_PHASE:
-                datagram.powerFailsAnyPhase = static_cast<byte>(data.toInt());
+                datagram.setPowerFailsAnyPhase(static_cast<byte>(data.toInt()));
                 break;
             case LONG_PWR_FAILS_ANY_PHASE:
-                datagram.longPowerFailsAnyPhase = static_cast<byte>(data.toInt());
+                datagram.setLongPowerFailsAnyPhase(static_cast<byte>(data.toInt()));
                 break;
             case PWR_FAIL_EVENT_LOG:
-                datagram.powerFailEventLog = data;
+                datagram.setPowerFailEventLog(data);
                 break;
             case VOLTAGE_SAGS_IN_PHASE_L1:
-                datagram.voltageSagsInPhaseL1 = static_cast<uint16_t>(data.toInt());
+                datagram.setVoltageSagsInPhaseL1(static_cast<uint16_t>(data.toInt()));
                 break;
             case VOLTAGE_SAGS_IN_PHASE_L2:
-                datagram.voltageSagsInPhaseL2 = static_cast<uint16_t>(data.toInt());
+                datagram.setVoltageSagsInPhaseL2(static_cast<uint16_t>(data.toInt()));
                 break;
             case TXT_MSG_CODES:
                 break;
             case TXT_MSG:
-                datagram.textMessages = data;
+                datagram.setTextMessages(data);
                 break;
             case INSTANTANEOUS_CURRENT_L1:
-                datagram.instantaneousCurrentL1 = data.toDouble();
+                datagram.setInstantaneousCurrentL1(data.toDouble());
                 break;
             case INSTANTANEOUS_ACTIVE_POWER_L1_PLUS_P:
-                datagram.instantaneousActivePowerL1PlusP = data.toDouble();
+                datagram.setInstantaneousActivePowerL1PlusP(data.toDouble());
                 break;
             case INSTANTANEOUS_ACTIVE_POWER_L1_MIN_P:
-                datagram.instantaneousActivePowerL1MinP = data.toDouble();
+                datagram.setInstantaneousActivePowerL1MinP(data.toDouble());
                 break;
             case DEVICE_TYPE:
-                datagram.deviceType = static_cast<byte>(data.toInt());
+                datagram.setDeviceType(static_cast<byte>(data.toInt()));
                 break;
             case CONSUMED_GAS:
-                datagram.consumedGas = data.toDouble();
+                datagram.setConsumedGas(data.toDouble());
                 break;
             default:
                 // Unknown tag, ignore
