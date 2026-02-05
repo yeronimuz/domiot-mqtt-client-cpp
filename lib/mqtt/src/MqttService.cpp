@@ -23,7 +23,7 @@ void MqttService::connect()
         {
             Serial.println("No MQTT credentials provided, trying anonymous connection...");
             char deviceIdStr[10];
-            ltoa(_device._deviceId, deviceIdStr, 10);
+            ltoa(_device.getDeviceId(), deviceIdStr, 10);
             if (_mqttClient.connect(deviceIdStr))
             {
                 Serial.println("Connected!");
@@ -84,7 +84,7 @@ void MqttService::callback(char *topic, byte *payload, unsigned int length)
         
         // Now create device from JSON
         _device = Device::fromJson(doc.as<JsonObject>());
-        Serial.printf("Device ID:  %ld\n", _device._deviceId);
+        Serial.printf("Device ID:  %ld\n", _device.getDeviceId());
     }
 
 }

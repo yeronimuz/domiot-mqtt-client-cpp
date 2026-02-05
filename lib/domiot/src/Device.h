@@ -37,6 +37,8 @@ public:
     const std::vector<Sensor>& getSensors() const { return _sensors; }
     const std::vector<Actuator>& getActuators() const { return _actuators; }
 
+    long getSensorIdByType(SensorType type);
+
     // Setters
     void setDeviceId(long deviceId) { _deviceId = deviceId; }
     void setManufacturerId(const String& manufacturerId) { _manufacturerId = manufacturerId; }

@@ -3,7 +3,7 @@
 #include <SensorValue.h>
 #include <Device.h>
 
-std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValue(Device device, const P1Datagram &datagram)
+std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device device, const P1Datagram &datagram)
 {
     std::vector<SensorValue> sensorValues;
 
@@ -16,7 +16,6 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValue(Device de
         sv.setValue(getValueFromDatagram(sensor, datagram));
         sensorValues.push_back(sv);
     }
-    // Add more mappings as needed...
 
     return sensorValues;
 }
@@ -60,5 +59,5 @@ double P1DatagramSensorValueMapper::getValueFromDatagram(Sensor sensor, P1Datagr
             return 0.0; // Unsupported type
         }
     }
-    return 0.0; // Type not found
+    return 0.0; // Type not used
 }

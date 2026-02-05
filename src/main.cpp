@@ -11,10 +11,11 @@
 #include <DomiotConfig.h>
 #include <P1Reader.h>
 #include <P1Datagram.h>
+#include <SensorValue.h>
+#include <vector>
+#include "P1DatagramSensorValueMapper.h"
 
 #define MAX_WIFI_RETRIES 20
-#define INCLUDE_TEMPERATURE_SENSOR false
-#define INCLUDE_BATTERY_LEVEL_SENSOR false
 #define SENSOR_VALUE_TOPIC "sensor"
 
 AsyncWebServer server(80);
@@ -26,7 +27,7 @@ SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX, inverted)
 String deviceName = "ESP_Sensor";
 String deviceType = "TemperatureSensor";
 
-MqttService* mqttService = nullptr;
+MqttService *mqttService = nullptr;
 Device device;
 long tempSensorId;
 long batterySensorId;
@@ -113,6 +114,7 @@ void setup()
             mqttConfig.getMqttUser(),
             mqttConfig.getMqttPassword(),
             &wifiClient);
+
         Serial.print("Connecting to MQTT ");
         while (!mqttService->isConnected())
         {
@@ -120,17 +122,27 @@ void setup()
             delay(500);
         }
         Serial.println("\nMQTT connected!");
-        
-        if (device._deviceId == 0)
+
+        if (device.getDeviceId() == 0)
         {
             Serial.println("No device ID configured, registering device...");
             mqttService->registerDevice(device);
+            Serial.println("Device registration initiated, waiting for device ID assignment...");
+            // Wait for device to be registered and assigned an ID. The ID will be set in the callback.
+            while (device.getDeviceId() == 0)
+            {
+                mqttService->getClient().loop();
+                delay(100);
+            }
+            Serial.printf("Assigned device ID: %ld\n", device.getDeviceId());
+            // Update sensorIds after registration
+            tempSensorId = device.getSensorIdByType(SensorType::TEMP);
+            batterySensorId = device.getSensorIdByType(SensorType::VOLTAGE_LEVEL);
         }
         else
         {
-            Serial.printf("Using configured device ID: %ld\n", device._deviceId);
+            Serial.printf("Using configured device ID: %ld\n", device.getDeviceId());
         }
-
     }
     else
     {
@@ -138,6 +150,60 @@ void setup()
     }
 
     Serial.println("Setup complete!");
+}
+
+void publishTemperatureSensorValue(unsigned long now, unsigned long lastPublish, const String& timestamp)
+{
+    if (tempSensorId != 0 && now - lastPublish >= 1000)
+    {
+        float temperature = TemperatureSensor::readTemperature();
+        if (temperature != lastSentTemperature)
+        {
+            String payload = "{";
+            payload += "\"sensorId\": " + String(tempSensorId) + ", ";
+            payload += "\"timestamp\": \"" + timestamp + "\", ";
+            lastSentTemperature = temperature;
+            payload += "\"value\": " + String(temperature, 2);
+            payload += "}";
+            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+        }
+    }
+}
+
+void publishBatterySensorValue(unsigned long now, unsigned long lastPublish, const String& timestamp)
+{
+    if (batterySensorId != 0 && now - lastPublish >= 1000)
+    {
+        float batteryLevel = BatteryLevel::readBatteryLevel();
+        if (batteryLevel != lastSentBatteryLevel)
+        {
+            String payload = "{";
+            lastSentBatteryLevel = batteryLevel;
+            payload += "\"sensorId\": " + String(batterySensorId) + ", ";
+            payload += "\"timestamp\": \"" + timestamp + "\", ";
+            payload += "\"value\": " + String(batteryLevel, 2);
+            payload += "}";
+            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+        }
+    }
+}
+
+void publishP1SensorValues()
+{
+    if (device.getSensorIdByType(SensorType::POWER_CT1) != 0)
+    {
+        // Read P1 data here
+        P1Datagram p1Datagram = P1Reader::readDatagram(mySerial);
+
+        // Map P1Datagram to SensorValues and publish
+        std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
+
+        for (SensorValue sv : sensorValues)
+        {
+            String payload = sv.toString();
+            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+        }
+    }
 }
 
 void loop()
@@ -159,47 +225,11 @@ void loop()
         unsigned long now = millis();
 
         String timestamp = getTimestamp();
-        String payload;
-        payload += "{";
-        payload += "\"sensorId\": 0, ";
-        payload += "\"timestamp\": \"" + timestamp + "\", ";
-
-        if (INCLUDE_TEMPERATURE_SENSOR && now - lastSentMqttPublish >= 1000)
-        {
-            float temperature = TemperatureSensor::readTemperature();
-            if (temperature != lastSentTemperature)
-            {
-                lastSentTemperature = temperature;
-                payload += "\"value\": " + String(temperature, 2);
-                payload += "}";
-                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
-            }
-        }
-        else if (INCLUDE_BATTERY_LEVEL_SENSOR && now - lastSentMqttPublish >= 1000)
-        {
-            float batteryLevel = BatteryLevel::readBatteryLevel();
-            if (batteryLevel != lastSentBatteryLevel)
-            {
-                lastSentBatteryLevel = batteryLevel;
-                payload += "\"value\": " + String(batteryLevel, 2);
-                payload += "}";
-                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
-            }
-        }
-        else
-        {
-            // Read P1 data here
-            P1Datagram p1Datagram = P1Reader::readDatagram(mySerial);
-            // Map P1Datagram to SensorValues and publish
-            String* payloadParts = p1Datagram.getAsPayload();
-            for (int i = 0; i < MAX_P1_ITEMS && payloadParts[i][0] != 0; i++)
-            {
-                payload += payloadParts[i];
-                payload += "}";
-                mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
-            }
-            delete[] payloadParts;
-        }
+        
+        publishTemperatureSensorValue(now, lastSentMqttPublish, timestamp);
+        publishBatterySensorValue(now, lastSentMqttPublish, timestamp);
+        publishP1SensorValues();
+        
         lastSentMqttPublish = now;
     }
     else

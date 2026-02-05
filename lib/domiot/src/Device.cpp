@@ -15,6 +15,15 @@ static ParamType getParamType(const String& typeStr) {
     return ParamType::STRING;
 }
 
+long Device::getSensorIdByType(SensorType type) {
+    for (const Sensor& sensor : _sensors) {
+        if (sensor.getType() == type) {
+            return sensor.getSensorId();
+        }
+    }
+    return 0; // Return 0 if not found, indicating no sensor of that type
+}
+
 Device Device::fromJson(const JsonObject& json) {
     Device device = Device();
     
