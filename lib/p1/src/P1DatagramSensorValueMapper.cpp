@@ -7,13 +7,13 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValue(Device de
 {
     std::vector<SensorValue> sensorValues;
 
-    for (const Sensor &sensor : device._sensors)
+    for (const Sensor &sensor : device.getSensors())
     {
         SensorValue sv;
-        sv.sensorId = sensor._sensorId;
-        sv.timestamp = datagram.getTimestamp();
+        sv.setSensorId(sensor.getSensorId());
+        sv.setTimestamp(datagram.getTimestamp());
 
-        sv.value = getValueFromDatagram(sensor, datagram);
+        sv.setValue(getValueFromDatagram(sensor, datagram));
         sensorValues.push_back(sv);
     }
     // Add more mappings as needed...
@@ -23,9 +23,9 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValue(Device de
 
 double P1DatagramSensorValueMapper::getValueFromDatagram(Sensor sensor, P1Datagram datagram)
 {
-    if (sensor._type != SensorType::NOT_USED)
+    if (sensor.getType() != SensorType::NOT_USED)
     {
-        int typeId = sensor._type.getId();
+        int typeId = sensor.getType().getId();
         if (typeId == SensorType::POWER_PT1.getId())
         {
             return datagram.getConsumedPowerT1();

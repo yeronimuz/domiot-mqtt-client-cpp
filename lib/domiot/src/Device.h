@@ -12,7 +12,7 @@
 
 class Device
 {
-public:
+private:
     long _deviceId;
     String _manufacturerId;
     String _modelId;
@@ -23,7 +23,35 @@ public:
     std::vector<Sensor> _sensors;
     std::vector<Actuator> _actuators;
 
+public:
     Device() = default;
+
+    // Getters
+    long getDeviceId() const { return _deviceId; }
+    String getManufacturerId() const { return _manufacturerId; }
+    String getModelId() const { return _modelId; }
+    String getFirmwareVersion() const { return _firmwareVersion; }
+    String getHardwareVersion() const { return _hardwareVersion; }
+    String getMacAddress() const { return _macAddress; }
+    const std::vector<ConfigParameter>& getParameters() const { return _parameters; }
+    const std::vector<Sensor>& getSensors() const { return _sensors; }
+    const std::vector<Actuator>& getActuators() const { return _actuators; }
+
+    // Setters
+    void setDeviceId(long deviceId) { _deviceId = deviceId; }
+    void setManufacturerId(const String& manufacturerId) { _manufacturerId = manufacturerId; }
+    void setModelId(const String& modelId) { _modelId = modelId; }
+    void setFirmwareVersion(const String& firmwareVersion) { _firmwareVersion = firmwareVersion; }
+    void setHardwareVersion(const String& hardwareVersion) { _hardwareVersion = hardwareVersion; }
+    void setMacAddress(const String& macAddress) { _macAddress = macAddress; }
+    void setParameters(const std::vector<ConfigParameter>& parameters) { _parameters = parameters; }
+    void setSensors(const std::vector<Sensor>& sensors) { _sensors = sensors; }
+    void setActuators(const std::vector<Actuator>& actuators) { _actuators = actuators; }
+
+    // Mutable access for building/modifying
+    std::vector<ConfigParameter>& parameters() { return _parameters; }
+    std::vector<Sensor>& sensors() { return _sensors; }
+    std::vector<Actuator>& actuators() { return _actuators; }
 
     static Device fromJson(const JsonObject &json);
     static void toJson(const Device &device);

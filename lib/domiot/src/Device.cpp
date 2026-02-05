@@ -30,27 +30,27 @@ Device Device::fromJson(const JsonObject& json) {
     if (!paramsArray.isNull()) {
         for (JsonObject paramObj : paramsArray) {
             ConfigParameter param;
-            param._name = paramObj["name"] | "";
-            param._parameterType = paramObj["parameterType"] | "";
+            param.setName(paramObj["name"] | "");
+            param.setParameterType(paramObj["parameterType"] | "");
             
             // Parse value based on type
-            switch (getParamType(param._parameterType)) {
+            switch (getParamType(param.getParameterType())) {
                 case ParamType::INT:
-                    param._value = paramObj["value"].as<int>();
+                    param.setValue(paramObj["value"].as<int>());
                     break;
                 case ParamType::FLOAT:
-                    param._value = paramObj["value"].as<float>();
+                    param.setValue(paramObj["value"].as<float>());
                     break;
                 case ParamType::BOOL:
-                    param._value = paramObj["value"].as<bool>();
+                    param.setValue(paramObj["value"].as<bool>());
                     break;
                 case ParamType::STRING:
                 default:
-                    param._value = String(paramObj["value"].as<const char*>());
+                    param.setValue(String(paramObj["value"].as<const char*>()));
                     break;
             }
             
-            param._readonly = paramObj["readonly"] | false;
+            param.setReadonly(paramObj["readonly"] | false);
             device._parameters.push_back(param);
         }
     }
@@ -67,8 +67,8 @@ Device Device::fromJson(const JsonObject& json) {
             // Parse topic
             JsonObject topicObj = sensorObj["topic"];
             if (!topicObj.isNull()) {
-                sensor._topic._type = topicObj["type"] | "";
-                sensor._topic._path = topicObj["path"] | "";
+                sensor.topic().setType(topicObj["type"] | "");
+                sensor.topic().setPath(topicObj["path"] | "");
             }
 
             // Parse sensor parameters
@@ -76,28 +76,28 @@ Device Device::fromJson(const JsonObject& json) {
             if (!sensorParamsArray.isNull()) {
                 for (JsonObject paramObj : sensorParamsArray) {
                     ConfigParameter param = ConfigParameter();
-                    param._name = paramObj["name"] | "";
-                    param._parameterType = paramObj["parameterType"] | "";
+                    param.setName(paramObj["name"] | "");
+                    param.setParameterType(paramObj["parameterType"] | "");
                     
                     // Parse value based on type
-                    switch (getParamType(param._parameterType)) {
+                    switch (getParamType(param.getParameterType())) {
                         case ParamType::INT:
-                            param._value = paramObj["value"].as<int>();
+                            param.setValue(paramObj["value"].as<int>());
                             break;
                         case ParamType::FLOAT:
-                            param._value = paramObj["value"].as<float>();
+                            param.setValue(paramObj["value"].as<float>());
                             break;
                         case ParamType::BOOL:
-                            param._value = paramObj["value"].as<bool>();
+                            param.setValue(paramObj["value"].as<bool>());
                             break;
                         case ParamType::STRING:
                         default:
-                            param._value = String(paramObj["value"].as<const char*>());
+                            param.setValue(String(paramObj["value"].as<const char*>()));
                             break;
                     }
                     
-                    param._readonly = paramObj["readonly"] | false;
-                    sensor._parameters.push_back(param);
+                    param.setReadonly(paramObj["readonly"] | false);
+                    sensor.parameters().push_back(param);
                 }
             }
 
