@@ -129,10 +129,18 @@ void setup()
             mqttService->registerDevice(device);
             Serial.println("Device registration initiated, waiting for device ID assignment...");
             // Wait for device to be registered and assigned an ID. The ID will be set in the callback.
+            int retryCount = 0;
             while (device.getDeviceId() == 0)
             {
                 mqttService->getClient().loop();
                 delay(100);
+                retryCount++;
+                if (retryCount > 50) { // Timeout after 5 seconds
+                    Serial.println("Timeout waiting for device ID assignment.");
+                    Serial.println("Re-registering device...");
+                    mqttService->registerDevice(device);
+                    retryCount = 0;
+                }
             }
             Serial.printf("Assigned device ID: %ld\n", device.getDeviceId());
             // Update sensorIds after registration
