@@ -106,6 +106,12 @@ void setup()
     {
         Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
         WiFi.mode(WIFI_STA);
+        // WiFi.setOutputPower(0); // Reduce WiFi power to minimal and hopefully reduce interference with smart meter
+        // WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
+        // WiFi.setPhyMode(WIFI_PHY_MODE_11B);
+        WiFi.setAutoReconnect(true);
+        WiFi.persistent(false);
+
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
         Serial.println("WiFi connection initiated (non-blocking)");
 
