@@ -9,21 +9,25 @@
 class MqttService {
     private:    
         String _mqttServer;
+        u_short _mqttPort;
         String _mqttUser;
         String _mqttPassword;
+        String _clientId;
         WiFiClient* _wifiClient;
         PubSubClient _mqttClient;
 
         Device _device;
     public:
-        MqttService(String server = "", String user = "", String password = "", WiFiClient* wifiClient = nullptr) :
+        MqttService(String server = "", u_short port = 1883, String user = "", String password = "", String clientId = "", WiFiClient* wifiClient = nullptr) :
             _mqttServer(server),
+            _mqttPort(port),
             _mqttUser(user),
             _mqttPassword(password),
+            _clientId(clientId),
             _wifiClient(wifiClient),
             _mqttClient(*wifiClient)
         {
-            _mqttClient.setServer(_mqttServer.c_str(), 1883);
+            _mqttClient.setServer(_mqttServer.c_str(), _mqttPort);
             _mqttClient.setCallback([this](char* topic, byte* payload, unsigned int length) {
                 this->callback(topic, payload, length);
             });

@@ -25,6 +25,8 @@ public:
     }
 
     String getMqttBroker() { return _mqttBroker; }
+    u_short getMqttPort() { return _mqttPort; }
     String getMqttUser() { return _mqttUser; }
     String getMqttPassword() { return _mqttPassword; }
+    String getClientId() { return _clientId; }
 };

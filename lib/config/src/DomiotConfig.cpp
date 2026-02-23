@@ -37,7 +37,10 @@ void DomiotConfig::getDomiotConfig()
     {
         _domiotJson = doc;
 
-        _wifiConfig = WifiConfig(doc["wifi"]["ssid"].as<String>(), doc["wifi"]["password"].as<String>());
+        _wifiConfig = WifiConfig(
+            doc["wifi"]["ssid"].as<String>(),
+            doc["wifi"]["password"].as<String>(),
+            doc["wifi"]["hostname"].as<String>());
 
         _mqttConfig = MqttConfig(
             doc["mqtt"]["host"].as<String>(),

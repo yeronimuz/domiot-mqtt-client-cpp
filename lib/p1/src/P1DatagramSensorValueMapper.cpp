@@ -3,6 +3,89 @@
 #include <SensorValue.h>
 #include <Device.h>
 
+namespace
+{
+bool isLeapYear(int year)
+{
+    if (year % 400 == 0)
+    {
+        return true;
+    }
+    if (year % 100 == 0)
+    {
+        return false;
+    }
+    return (year % 4 == 0);
+}
+
+int daysInMonth(int year, int month)
+{
+    static const int daysPerMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (month == 2 && isLeapYear(year))
+    {
+        return 29;
+    }
+    return daysPerMonth[month - 1];
+}
+
+String toUtcTimestamp(const String &p1Timestamp)
+{
+    if (p1Timestamp.length() < 13)
+    {
+        return p1Timestamp;
+    }
+
+    char dstFlag = p1Timestamp.charAt(p1Timestamp.length() - 1);
+    int offsetHours = 0;
+    if (dstFlag == 'W')
+    {
+        offsetHours = 2;
+    }
+    else if (dstFlag == 'S')
+    {
+        offsetHours = 1;
+    }
+    else
+    {
+        return p1Timestamp;
+    }
+
+    String digits = p1Timestamp.substring(0, p1Timestamp.length() - 1);
+    if (digits.length() < 12)
+    {
+        return p1Timestamp;
+    }
+
+    int year = 2000 + digits.substring(0, 2).toInt();
+    int month = digits.substring(2, 4).toInt();
+    int day = digits.substring(4, 6).toInt();
+    int hour = digits.substring(6, 8).toInt();
+    int minute = digits.substring(8, 10).toInt();
+    int second = digits.substring(10, 12).toInt();
+
+    hour -= offsetHours;
+    while (hour < 0)
+    {
+        hour += 24;
+        day -= 1;
+        if (day < 1)
+        {
+            month -= 1;
+            if (month < 1)
+            {
+                month = 12;
+                year -= 1;
+            }
+            day = daysInMonth(year, month);
+        }
+    }
+
+    char buffer[25];
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
+    return String(buffer);
+}
+} // namespace
+
 std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device device, const P1Datagram &datagram)
 {
     std::vector<SensorValue> sensorValues;
@@ -11,7 +94,7 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device d
     {
         SensorValue sv;
         sv.setSensorId(sensor.getSensorId());
-        sv.setTimestamp(datagram.getTimestamp());
+        sv.setTimestamp(toUtcTimestamp(datagram.getTimestamp()));
 
         sv.setValue(getValueFromDatagram(sensor, datagram));
         sensorValues.push_back(sv);

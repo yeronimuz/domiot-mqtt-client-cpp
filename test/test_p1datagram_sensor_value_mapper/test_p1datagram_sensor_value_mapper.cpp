@@ -29,11 +29,11 @@ void test_mapper_power_pt1(void) {
     Device device;
     device.sensors().push_back(createSensor(1, SensorType::POWER_PT1));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(1, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
 }
 
@@ -44,11 +44,11 @@ void test_mapper_power_pt2(void) {
     Device device;
     device.sensors().push_back(createSensor(2, SensorType::POWER_PT2));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(2, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[0].getValue());
 }
 
@@ -59,11 +59,11 @@ void test_mapper_gas_meter(void) {
     Device device;
     device.sensors().push_back(createSensor(3, SensorType::GAS_METER));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(3, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1265.379, sensorValues[0].getValue());
 }
 
@@ -74,11 +74,11 @@ void test_mapper_power_ap(void) {
     Device device;
     device.sensors().push_back(createSensor(4, SensorType::POWER_AP));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(4, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.490, sensorValues[0].getValue());
 }
 
@@ -89,11 +89,11 @@ void test_mapper_power_ac(void) {
     Device device;
     device.sensors().push_back(createSensor(5, SensorType::POWER_AC));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(5, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.000, sensorValues[0].getValue());
 }
 
@@ -104,11 +104,11 @@ void test_mapper_power_ct1(void) {
     Device device;
     device.sensors().push_back(createSensor(6, SensorType::POWER_CT1));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(6, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
 }
 
@@ -119,11 +119,11 @@ void test_mapper_power_ct2(void) {
     Device device;
     device.sensors().push_back(createSensor(7, SensorType::POWER_CT2));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(7, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[0].getValue());
 }
 
@@ -134,11 +134,11 @@ void test_mapper_not_used(void) {
     Device device;
     device.sensors().push_back(createSensor(8, SensorType::NOT_USED));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(8, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, sensorValues[0].getValue());
 }
 
@@ -149,11 +149,11 @@ void test_mapper_unsupported_type(void) {
     Device device;
     device.sensors().push_back(createSensor(9, SensorType::TEMP));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(9, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, sensorValues[0].getValue());
 }
 
@@ -168,34 +168,34 @@ void test_mapper_multiple_sensors(void) {
     device.sensors().push_back(createSensor(4, SensorType::POWER_AP));
     device.sensors().push_back(createSensor(5, SensorType::POWER_AC));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(5, sensorValues.size());
     
     // Verify POWER_PT1
     TEST_ASSERT_EQUAL_INT(1, sensorValues[0].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
     
     // Verify POWER_PT2
     TEST_ASSERT_EQUAL_INT(2, sensorValues[1].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[1].getValue());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[1].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[1].getTimestamp().c_str());
     
     // Verify GAS_METER
     TEST_ASSERT_EQUAL_INT(3, sensorValues[2].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1265.379, sensorValues[2].getValue());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[2].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[2].getTimestamp().c_str());
     
     // Verify POWER_AP
     TEST_ASSERT_EQUAL_INT(4, sensorValues[3].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.490, sensorValues[3].getValue());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[3].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[3].getTimestamp().c_str());
     
     // Verify POWER_AC
     TEST_ASSERT_EQUAL_INT(5, sensorValues[4].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.000, sensorValues[4].getValue());
-    TEST_ASSERT_EQUAL_STRING("220601161852S", sensorValues[4].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[4].getTimestamp().c_str());
 }
 
 // Test mapping with empty device (no sensors)
@@ -204,7 +204,7 @@ void test_mapper_empty_device(void) {
     
     Device device;
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(0, sensorValues.size());
 }
@@ -222,7 +222,7 @@ void test_mapper_all_supported_types(void) {
     device.sensors().push_back(createSensor(6, SensorType::POWER_AC));
     device.sensors().push_back(createSensor(7, SensorType::GAS_METER));
     
-    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValue(device, datagram);
+    std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
     TEST_ASSERT_EQUAL_INT(7, sensorValues.size());
     
@@ -237,7 +237,7 @@ void test_mapper_all_supported_types(void) {
     
     // Verify all have the same timestamp
     for (const auto& sv : sensorValues) {
-        TEST_ASSERT_EQUAL_STRING("220601161852S", sv.getTimestamp().c_str());
+        TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sv.getTimestamp().c_str());
     }
 }
 

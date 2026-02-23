@@ -6,11 +6,16 @@ void MqttService::connect()
     while (!isConnected())
     {
         Serial.print("Connecting to MQTT... ");
+        String effectiveClientId = _clientId;
+        if (effectiveClientId.length() == 0)
+        {
+            effectiveClientId = "domiot-" + String(ESP.getChipId(), HEX);
+        }
 
         if (_mqttUser.length() > 0 && _mqttPassword.length() > 0 && _mqttServer.length() > 0)
         {
-            Serial.printf("Using MQTT config %s, %s\n", _mqttServer.c_str(), _mqttUser.c_str());
-            if (_mqttClient.connect(_mqttServer.c_str(), _mqttUser.c_str(), _mqttPassword.c_str()))
+            Serial.printf("Using MQTT config %s, %s, %s\n", _mqttServer.c_str(), _mqttUser.c_str(), effectiveClientId.c_str());
+            if (_mqttClient.connect(effectiveClientId.c_str(), _mqttUser.c_str(), _mqttPassword.c_str()))
             {
                 Serial.println("Connected!");
             }
@@ -22,9 +27,7 @@ void MqttService::connect()
         else
         {
             Serial.println("No MQTT credentials provided, trying anonymous connection...");
-            char deviceIdStr[10];
-            ltoa(_device.getDeviceId(), deviceIdStr, 10);
-            if (_mqttClient.connect(deviceIdStr))
+            if (_mqttClient.connect(effectiveClientId.c_str()))
             {
                 Serial.println("Connected!");
             }

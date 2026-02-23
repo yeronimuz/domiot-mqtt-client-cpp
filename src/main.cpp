@@ -14,6 +14,7 @@
 #include <SensorValue.h>
 #include <vector>
 #include "P1DatagramSensorValueMapper.h"
+#include <TimeService.h>
 
 #define MAX_WIFI_RETRIES 20
 #define SENSOR_VALUE_TOPIC "sensor"
@@ -22,7 +23,7 @@ AsyncWebServer server(80);
 
 WiFiClient wifiClient;
 
-SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX, inverted)
+SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX (one wire protocol), inverted)
 
 String deviceName = "ESP_Sensor";
 String deviceType = "TemperatureSensor";
@@ -36,19 +37,7 @@ unsigned long ota_progress_millis = 0;
 float lastSentTemperature = 0.0;
 float lastSentBatteryLevel = 0.0;
 unsigned long lastSentMqttPublish = 0;
-
-String getTimestamp()
-{
-    // Format timestamp as ISO 8601: "2025-03-17T21:55:59.524"
-    time_t now = time(nullptr);
-    struct tm *timeinfo = localtime(&now);
-    char timestamp_buffer[30];
-    strftime(timestamp_buffer, sizeof(timestamp_buffer), "%Y-%m-%dT%H:%M:%S", timeinfo);
-    unsigned long milliseconds = millis() % 1000;
-    char ms_buffer[4];
-    sprintf(ms_buffer, "%03lu", milliseconds);
-    return String(timestamp_buffer) + "." + String(ms_buffer);
-}
+TimeService timeService;
 
 void onOTAStart()
 {
@@ -112,13 +101,27 @@ void setup()
         WiFi.setAutoReconnect(true);
         WiFi.persistent(false);
 
+        String wifiHostname = wifiConfig.getWifiHostname();
+        if (wifiHostname.length() == 0)
+        {
+            wifiHostname = mqttConfig.getClientId();
+        }
+        if (wifiHostname.length() == 0)
+        {
+            wifiHostname = "domiot-" + String(ESP.getChipId(), HEX);
+        }
+        WiFi.hostname(wifiHostname);
+        Serial.printf("Using WiFi hostname: %s\n", wifiHostname.c_str());
+
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
         Serial.println("WiFi connection initiated (non-blocking)");
 
         mqttService = new MqttService(
             mqttConfig.getMqttBroker(),
+            mqttConfig.getMqttPort(),
             mqttConfig.getMqttUser(),
             mqttConfig.getMqttPassword(),
+            mqttConfig.getClientId(),
             &wifiClient);
 
         Serial.print("Connecting to MQTT ");
@@ -128,6 +131,16 @@ void setup()
             delay(500);
         }
         Serial.println("\nMQTT connected!");
+
+        timeService.syncUtcTime();
+        if (timeService.isTimeSynced())
+        {
+            Serial.println("UTC time synchronized.");
+        }
+        else
+        {
+            Serial.println("UTC time not synchronized yet.");
+        }
 
         if (device.getDeviceId() == 0)
         {
@@ -238,13 +251,15 @@ void loop()
 
         unsigned long now = millis();
 
-        String timestamp = getTimestamp();
-        
-        publishTemperatureSensorValue(now, lastSentMqttPublish, timestamp);
-        publishBatterySensorValue(now, lastSentMqttPublish, timestamp);
         publishP1SensorValues();
-        
-        lastSentMqttPublish = now;
+
+        if (timeService.ensureUtcTimeSynced())
+        {
+            String timestamp = timeService.getUtcTimestamp();
+            publishTemperatureSensorValue(now, lastSentMqttPublish, timestamp);
+            publishBatterySensorValue(now, lastSentMqttPublish, timestamp);
+            lastSentMqttPublish = now;
+        }
     }
     else
     {
