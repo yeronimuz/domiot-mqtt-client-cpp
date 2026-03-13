@@ -13,7 +13,6 @@
 class Device
 {
 private:
-    long _deviceId;
     String _manufacturerId;
     String _modelId;
     String _firmwareVersion;
@@ -24,10 +23,16 @@ private:
     std::vector<Actuator> _actuators;
 
 public:
-    Device() = default;
+    Device()
+        : _manufacturerId(""),
+          _modelId(""),
+          _firmwareVersion(""),
+          _hardwareVersion(""),
+          _macAddress("")
+    {
+    }
 
     // Getters
-    long getDeviceId() const { return _deviceId; }
     String getManufacturerId() const { return _manufacturerId; }
     String getModelId() const { return _modelId; }
     String getFirmwareVersion() const { return _firmwareVersion; }
@@ -38,9 +43,10 @@ public:
     const std::vector<Actuator>& getActuators() const { return _actuators; }
 
     long getSensorIdByType(SensorType type);
+    bool hasUnassignedSensors() const;
+    static bool hasUnassignedSensors(const Device& device) { return device.hasUnassignedSensors(); }
 
     // Setters
-    void setDeviceId(long deviceId) { _deviceId = deviceId; }
     void setManufacturerId(const String& manufacturerId) { _manufacturerId = manufacturerId; }
     void setModelId(const String& modelId) { _modelId = modelId; }
     void setFirmwareVersion(const String& firmwareVersion) { _firmwareVersion = firmwareVersion; }
@@ -56,6 +62,6 @@ public:
     std::vector<Actuator>& actuators() { return _actuators; }
 
     static Device fromJson(const JsonObject &json);
-    static void toJson(const Device &device);
+    static void toJson(const Device &device, JsonDocument &doc);
     static void writeDeviceJson(JsonDocument &doc);
 };

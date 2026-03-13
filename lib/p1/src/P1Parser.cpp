@@ -1,13 +1,6 @@
 #include "P1Parser.h"
 #include <string>
 
-boolean P1Parser::isValidDatagram(const String &p1Message)
-{
-    // Basic validation: check for start and end markers
-    // TODO: Maybe check unique key and checksum in the future
-    return p1Message.startsWith("/") && p1Message.endsWith("!");
-}
-
 P1Datagram P1Parser::parse(const String &p1Message)
 {
     P1Datagram datagram;

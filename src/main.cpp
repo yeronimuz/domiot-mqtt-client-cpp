@@ -39,6 +39,40 @@ float lastSentBatteryLevel = 0.0;
 unsigned long lastSentMqttPublish = 0;
 TimeService timeService;
 
+static String sanitizeConfigString(String value)
+{
+    value.trim();
+    if (value.equalsIgnoreCase("null") || value.equalsIgnoreCase("undefined"))
+    {
+        return "";
+    }
+    return value;
+}
+
+static String resolveWifiHostname(WifiConfig& wifiConfig, MqttConfig& mqttConfig)
+{
+    String wifiHostname = sanitizeConfigString(wifiConfig.getWifiHostname());
+    if (wifiHostname.length() == 0)
+    {
+        wifiHostname = sanitizeConfigString(mqttConfig.getClientId());
+    }
+    if (wifiHostname.length() == 0)
+    {
+        wifiHostname = "domiot-" + String(ESP.getChipId(), HEX);
+    }
+    return wifiHostname;
+}
+
+static void logNetworkInfo()
+{
+    Serial.printf("WiFi hostname: %s\n", WiFi.hostname().c_str());
+    Serial.printf("WiFi MAC: %s\n", WiFi.macAddress().c_str());
+    Serial.printf("WiFi local IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("WiFi subnet mask: %s\n", WiFi.subnetMask().toString().c_str());
+    Serial.printf("WiFi gateway IP: %s\n", WiFi.gatewayIP().toString().c_str());
+    Serial.printf("WiFi DNS: %s\n", WiFi.dnsIP().toString().c_str());
+}
+
 void onOTAStart()
 {
     Serial.println("OTA update started!");
@@ -76,6 +110,8 @@ void setup()
     WifiConfig wifiConfig = config.getWifiConfig();
     MqttConfig mqttConfig = config.getMqttConfig();
     device = config.getDevice();
+    // For registration purposes, we need to set the MAC address in the device config, as it's used as a unique identifier for the device. 
+    device.setMacAddress(WiFi.macAddress());
 
     // Setup web server routes before starting
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -95,21 +131,10 @@ void setup()
     {
         Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
         WiFi.mode(WIFI_STA);
-        // WiFi.setOutputPower(0); // Reduce WiFi power to minimal and hopefully reduce interference with smart meter
-        // WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
-        // WiFi.setPhyMode(WIFI_PHY_MODE_11B);
         WiFi.setAutoReconnect(true);
         WiFi.persistent(false);
 
-        String wifiHostname = wifiConfig.getWifiHostname();
-        if (wifiHostname.length() == 0)
-        {
-            wifiHostname = mqttConfig.getClientId();
-        }
-        if (wifiHostname.length() == 0)
-        {
-            wifiHostname = "domiot-" + String(ESP.getChipId(), HEX);
-        }
+        String wifiHostname = resolveWifiHostname(wifiConfig, mqttConfig);
         WiFi.hostname(wifiHostname);
         Serial.printf("Using WiFi hostname: %s\n", wifiHostname.c_str());
 
@@ -131,6 +156,7 @@ void setup()
             delay(500);
         }
         Serial.println("\nMQTT connected!");
+        logNetworkInfo();
 
         timeService.syncUtcTime();
         if (timeService.isTimeSynced())
@@ -142,33 +168,41 @@ void setup()
             Serial.println("UTC time not synchronized yet.");
         }
 
-        if (device.getDeviceId() == 0)
+        if (device.hasUnassignedSensors())
         {
-            Serial.println("No device ID configured, registering device...");
+            Serial.println("One or more sensorIds are not assigned, registering device...");
             mqttService->registerDevice(device);
-            Serial.println("Device registration initiated, waiting for device ID assignment...");
-            // Wait for device to be registered and assigned an ID. The ID will be set in the callback.
+            Serial.println("Device registration initiated, waiting for sensor ID assignment...");
+            // Wait for config response with assigned sensor IDs.
             int retryCount = 0;
-            while (device.getDeviceId() == 0)
+            while (device.hasUnassignedSensors())
             {
                 mqttService->getClient().loop();
+
+                if (!device.hasUnassignedSensors(mqttService->getDevice()))
+                {
+                    device = mqttService->getDevice();
+                    Serial.println("Received assigned sensor IDs from config.");
+                    break;
+                }
+
                 delay(100);
                 retryCount++;
                 if (retryCount > 50) { // Timeout after 5 seconds
-                    Serial.println("Timeout waiting for device ID assignment.");
+                    Serial.println("Timeout waiting for sensor ID assignment.");
                     Serial.println("Re-registering device...");
                     mqttService->registerDevice(device);
                     retryCount = 0;
                 }
             }
-            Serial.printf("Assigned device ID: %ld\n", device.getDeviceId());
+            Serial.println("Sensor ID assignment completed.");
             // Update sensorIds after registration
             tempSensorId = device.getSensorIdByType(SensorType::TEMP);
             batterySensorId = device.getSensorIdByType(SensorType::VOLTAGE_LEVEL);
         }
         else
         {
-            Serial.printf("Using configured device ID: %ld\n", device.getDeviceId());
+            Serial.println("Using configured sensor IDs from device configuration.");
         }
     }
     else
@@ -219,6 +253,9 @@ void publishP1SensorValues()
 {
     if (device.getSensorIdByType(SensorType::POWER_CT1) != 0)
     {
+        // Sensor ID for POWER_CT1 (and presumably other P1 sensors) is configured, 
+        // so we can continue to read and publish P1 sensor values
+        
         // Read P1 data here
         P1Datagram p1Datagram = P1Reader::readDatagram(mySerial);
 
@@ -228,6 +265,7 @@ void publishP1SensorValues()
         for (SensorValue sv : sensorValues)
         {
             String payload = sv.toString();
+            Serial.printf("Publishing P1 sensor value: %s\n", payload.c_str());
             mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
         }
     }

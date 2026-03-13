@@ -35,7 +35,7 @@ class MqttService {
 
         void connect();
         boolean isConnected();
-        void registerDevice(Device device);
+        void registerDevice(const Device& device);
         void callback(char *topic, byte *payload, unsigned int length);
         Device& getDevice() { return _device; }
         PubSubClient &getClient() { return _mqttClient; }

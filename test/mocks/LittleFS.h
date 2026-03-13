@@ -4,6 +4,6 @@
 #include "FS.h"
 
 // Mock LittleFS for native platform testing
-extern FS LittleFS;
+inline FS LittleFS;
 
 #endif // LITTLEFS_H

@@ -1,6 +1,11 @@
 #include "MqttService.h"
 #include <ArduinoJson.h>
 
+namespace {
+constexpr const char* REGISTER_TOPIC = "register";
+constexpr const char* CONFIG_TOPIC = "config";
+}
+
 void MqttService::connect()
 {
     while (!isConnected())
@@ -14,7 +19,12 @@ void MqttService::connect()
 
         if (_mqttUser.length() > 0 && _mqttPassword.length() > 0 && _mqttServer.length() > 0)
         {
-            Serial.printf("Using MQTT config %s, %s, %s\n", _mqttServer.c_str(), _mqttUser.c_str(), effectiveClientId.c_str());
+            Serial.print("Using MQTT config ");
+            Serial.print(_mqttServer);
+            Serial.print(", ");
+            Serial.print(_mqttUser);
+            Serial.print(", ");
+            Serial.println(effectiveClientId);
             if (_mqttClient.connect(effectiveClientId.c_str(), _mqttUser.c_str(), _mqttPassword.c_str()))
             {
                 Serial.println("Connected!");
@@ -45,22 +55,52 @@ boolean MqttService::isConnected()
     return _mqttClient.connected();
 }
 
-void MqttService::registerDevice(Device device)
+void MqttService::registerDevice(const Device& device)
 {
     JsonDocument doc;
-    boolean isRegistered = false;
+    Device::toJson(device, doc);
 
     if (!isConnected())
     {
         connect();
     }
-    _mqttClient.subscribe("config");
+    if (!_mqttClient.subscribe(CONFIG_TOPIC))
+    {
+        Serial.println("Subscription to config topic failed before registration publish.");
+    }
 
-    String payload;
-    serializeJson(doc, payload);
-    isRegistered = _mqttClient.publish("register", (byte *)payload.c_str(), payload.length());
+    const size_t payloadLength = measureJson(doc);
+    const bool beginOk = _mqttClient.beginPublish(REGISTER_TOPIC, payloadLength, false);
+    if (!beginOk)
+    {
+        Serial.println("Failed to begin MQTT registration publish.");
+        Serial.print("MQTT state: ");
+        Serial.println(_mqttClient.state());
+        Serial.print("MQTT buffer size: ");
+        Serial.println(_mqttClient.getBufferSize());
+        Serial.print("Payload length: ");
+        Serial.println(static_cast<unsigned long>(payloadLength));
+        return;
+    }
+
+    const size_t writtenLength = serializeJson(doc, _mqttClient);
+    const bool endOk = (_mqttClient.endPublish() == 1);
+    const bool isRegistered = (writtenLength == payloadLength) && endOk;
+
     Serial.print("Device registration ");
     Serial.println(isRegistered ? "succeeded" : "failed");
+
+    if (!isRegistered)
+    {
+        Serial.print("Written length: ");
+        Serial.println(static_cast<unsigned long>(writtenLength));
+        Serial.print("MQTT state: ");
+        Serial.println(_mqttClient.state());
+        Serial.print("MQTT buffer size: ");
+        Serial.println(_mqttClient.getBufferSize());
+        Serial.print("Payload length: ");
+        Serial.println(static_cast<unsigned long>(payloadLength));
+    }
 }
 
 /* MqTT callback
@@ -87,7 +127,6 @@ void MqttService::callback(char *topic, byte *payload, unsigned int length)
         
         // Now create device from JSON
         _device = Device::fromJson(doc.as<JsonObject>());
-        Serial.printf("Device ID:  %ld\n", _device.getDeviceId());
     }
 
 }

@@ -7,7 +7,6 @@
 class P1Parser {
 private:    
     P1Parser() = default;
-    boolean isValidDatagram(const String& p1Message);
     
 public:
     static P1Datagram parse(const String& p1Message);
