@@ -141,6 +141,14 @@ def on_upload(source, target, env):
             "Connection": "keep-alive",
         }
 
+        # Free MQTT heap on device before Update.begin() runs inside /ota/start.
+        prepare_url = f"{upload_base_url}/ota/prepare"
+        try:
+            requests.get(prepare_url, headers=request_headers, auth=auth, timeout=10)
+            time.sleep(0.5)  # give the device a moment to free memory
+        except Exception:
+            pass  # best-effort; older firmware without this endpoint continues
+
         try:
             start_response = requests.get(start_url, headers=request_headers, auth=auth, timeout=30)
         except Exception as exc:

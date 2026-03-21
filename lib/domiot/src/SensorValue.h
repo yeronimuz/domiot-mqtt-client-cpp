@@ -20,6 +20,12 @@ public:
     void setSensorId(long id) { sensorId = id; }
     void setTimestamp(const String& ts) { timestamp = ts; }
     void setValue(float val) { value = val; }
+    String toJson() const
+    {
+        return "{\"sensorId\": " + String(sensorId) +
+               ", \"timestamp\": \"" + timestamp +
+               "\", \"value\": " + String(value, 3) + "}";
+    }
     String toString() const
     {
         return "SensorValue { sensorId: " + String(sensorId) + ", timestamp: " + timestamp + ", value: " + String(value, 2) + " }";

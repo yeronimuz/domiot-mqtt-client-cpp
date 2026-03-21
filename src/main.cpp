@@ -1,16 +1,15 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h> // Use <WiFi.h> for ESP32
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <ElegantOTA.h>
 #include "constants.h"
+#include <OTAService.h>
 #include <TemperatureSensor.h>
 #include <BatteryLevel.h>
 #include <MqttService.h>
 #include <DomiotConfig.h>
 #include <P1Reader.h>
 #include <P1Datagram.h>
+#include <P1Debug.h>
 #include <SensorValue.h>
 #include <vector>
 #include "P1DatagramSensorValueMapper.h"
@@ -24,21 +23,19 @@ constexpr uint8_t DATA_LINE_LED_ACTIVE_LEVEL = LOW;
 constexpr uint8_t DATA_LINE_LED_IDLE_LEVEL = HIGH;
 constexpr unsigned long DATA_LINE_LED_FLASH_DURATION_MS = 35;
 constexpr unsigned long DATA_LINE_LED_FLASH_INTERVAL_MS = 100;
-
-AsyncWebServer server(80);
+constexpr int P1_SERIAL_RX_BUFFER_SIZE = 1024;
+constexpr int P1_SERIAL_ISR_BUFFER_SIZE = 1024;
 
 WiFiClient wifiClient;
 
 SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX (one wire protocol), inverted)
+OTAService otaService;
 
 MqttService *mqttService = nullptr;
 Device device;
 long tempSensorId;
 long batterySensorId;
 
-unsigned long ota_progress_millis = 0;
-float lastSentTemperature = 0.0;
-float lastSentBatteryLevel = 0.0;
 unsigned long lastSentMqttPublish = 0;
 unsigned long dataLineLedOffMillis = 0;
 unsigned long lastDataLineFlashMillis = 0;
@@ -47,8 +44,9 @@ WiFiEventHandler wifiGotIpEventHandler;
 WiFiEventHandler wifiDisconnectedEventHandler;
 bool wifiAddressLogged = false;
 bool wifiConnectionEstablished = false;
-bool otaServiceStarted = false;
 bool p1SerialInitialized = false;
+
+static void setupP1Serial();
 
 static String sanitizeConfigString(String value)
 {
@@ -131,64 +129,6 @@ void flashDataLineLedOnActivity(bool dataAvailable)
     }
 }
 
-void onOTAStart()
-{
-    Serial.println("OTA update started!");
-}
-
-void onOTAProgress(size_t current, size_t final)
-{
-    // Log every 1 second
-    if (millis() - ota_progress_millis > 1000)
-    {
-        ota_progress_millis = millis();
-        Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
-    }
-}
-
-void onOTAEnd(bool success)
-{
-    if (success)
-    {
-        Serial.println("OTA update finished successfully!");
-    }
-    else
-    {
-        Serial.println("There was an error during OTA update!");
-    }
-}
-
-static void setupOtaService(const String& otaUsername, const String& otaPassword)
-{
-    if (otaServiceStarted)
-    {
-        return;
-    }
-
-    // Setup web server routes before starting.
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/plain", "Domiot Sensor update facility on /update."); });
-
-    // Setup ElegantOTA.
-    if (otaUsername.length() > 0 && otaPassword.length() > 0)
-    {
-        ElegantOTA.begin(&server, otaUsername.c_str(), otaPassword.c_str());
-        Serial.println("ElegantOTA authentication enabled.");
-    }
-    else
-    {
-        ElegantOTA.begin(&server);
-        Serial.println("ElegantOTA authentication disabled.");
-    }
-    ElegantOTA.onStart(onOTAStart);
-    ElegantOTA.onProgress(onOTAProgress);
-    ElegantOTA.onEnd(onOTAEnd);
-
-    server.begin();
-    otaServiceStarted = true;
-    Serial.printf("HTTP server started on port 80 (free heap=%lu)\n", static_cast<unsigned long>(ESP.getFreeHeap()));
-}
-
 static void setupP1Serial()
 {
     if (p1SerialInitialized)
@@ -196,7 +136,14 @@ static void setupP1Serial()
         return;
     }
 
-    mySerial.begin(115200, SWSERIAL_8N1, SERIAL_RX, -1, true, 512);
+    mySerial.begin(
+        115200,
+        SWSERIAL_8N1,
+        SERIAL_RX,
+        -1,
+        true,
+        P1_SERIAL_RX_BUFFER_SIZE,
+        P1_SERIAL_ISR_BUFFER_SIZE);
     mySerial.setTimeout(250); // Keep line reads responsive; P1 lines should end quickly.
     while (mySerial.available())
     {
@@ -204,7 +151,11 @@ static void setupP1Serial()
     }
 
     p1SerialInitialized = true;
-    Serial.printf("P1 serial port initialized (free heap=%lu)\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+    Serial.printf("P1 serial port initialized (buffer=%d, isr=%d, free heap=%lu, max block=%lu)\n",
+                  P1_SERIAL_RX_BUFFER_SIZE,
+                  P1_SERIAL_ISR_BUFFER_SIZE,
+                  static_cast<unsigned long>(ESP.getFreeHeap()),
+                  static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
 }
 
 void setup()
@@ -213,6 +164,7 @@ void setup()
     initDataLineActivityLed();
     delay(1000);
     Serial.println("\n\nStarting Domiot MQTT Client...");
+    otaService.attachP1Serial(&mySerial, &p1SerialInitialized, setupP1Serial);
 
     WifiConfig wifiConfig;
     MqttConfig mqttConfig;
@@ -259,7 +211,7 @@ void setup()
         if (WiFi.status() != WL_CONNECTED)
         {
             Serial.printf("\nWiFi connection failed after %d retries. Setting up WiFi-less mode (OTA only).\n", wifiRetries);
-            setupOtaService(otaUsername, otaPassword);
+            otaService.begin(otaUsername, otaPassword);
             Serial.println("Setup complete!");
             return;
         }
@@ -273,6 +225,7 @@ void setup()
             mqttConfig.getMqttPassword(),
             mqttConfig.getClientId(),
             &wifiClient);
+        otaService.setMqttService(mqttService);
 
         Serial.print("Connecting to MQTT ");
         while (!mqttService->isConnected())
@@ -334,12 +287,16 @@ void setup()
             Serial.println("Using configured sensor IDs from device configuration.");
         }
 
-        setupOtaService(otaUsername, otaPassword);
+        // Temporarily release MQTT resources to free heap for OTA auth processing
+        // OTA needs heap for digest auth computation; we'll reconnect in the loop if needed
+        Serial.printf("Free heap before OTA: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+        
+        otaService.begin(otaUsername, otaPassword);
     }
     else
     {
         Serial.println("No WiFi credentials configured - OTA available but no MQTT");
-        setupOtaService(otaUsername, otaPassword);
+        otaService.begin(otaUsername, otaPassword);
     }
 
     setupP1Serial();
@@ -347,44 +304,13 @@ void setup()
     Serial.println("Setup complete!");
 }
 
-void publishTemperatureSensorValue(unsigned long now, unsigned long lastPublish, const String& timestamp)
-{
-    if (tempSensorId != 0 && now - lastPublish >= 1000)
-    {
-        float temperature = TemperatureSensor::readTemperature();
-        if (temperature != lastSentTemperature)
-        {
-            String payload = "{";
-            payload += "\"sensorId\": " + String(tempSensorId) + ", ";
-            payload += "\"timestamp\": \"" + timestamp + "\", ";
-            lastSentTemperature = temperature;
-            payload += "\"value\": " + String(temperature, 2);
-            payload += "}";
-            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
-        }
-    }
-}
-
-void publishBatterySensorValue(unsigned long now, unsigned long lastPublish, const String& timestamp)
-{
-    if (batterySensorId != 0 && now - lastPublish >= 1000)
-    {
-        float batteryLevel = BatteryLevel::readBatteryLevel();
-        if (batteryLevel != lastSentBatteryLevel)
-        {
-            String payload = "{";
-            lastSentBatteryLevel = batteryLevel;
-            payload += "\"sensorId\": " + String(batterySensorId) + ", ";
-            payload += "\"timestamp\": \"" + timestamp + "\", ";
-            payload += "\"value\": " + String(batteryLevel, 2);
-            payload += "}";
-            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
-        }
-    }
-}
-
 void publishP1SensorValues()
 {
+    if (!p1SerialInitialized || otaService.isPrepared())
+    {
+        return;
+    }
+
     if (device.getSensorIdByType(SensorType::POWER_CT1) != 0)
     {
         static unsigned long lastValidDatagramMillis = 0;
@@ -424,20 +350,23 @@ void publishP1SensorValues()
 
         for (SensorValue sv : sensorValues)
         {
-            String payload = sv.toString();
-            Serial.printf("Publishing P1 sensor value: %s\n", payload.c_str());
-            mqttService->getClient().publish(SENSOR_VALUE_TOPIC, payload.c_str());
+            String payload = sv.toJson();
+            P1_DEBUG_PRINTF("P1 publish: %s\n", payload.c_str());
+            mqttService->getClient().publish(
+                SENSOR_VALUE_TOPIC,
+                reinterpret_cast<const uint8_t *>(payload.c_str()),
+                payload.length());
         }
     }
 }
 
 void loop()
 {
-    // OTA update handling - call this first
-    ElegantOTA.loop();
+    otaService.loop();
     yield();
 
-    flashDataLineLedOnActivity(mySerial.available() > 0);
+
+    flashDataLineLedOnActivity(p1SerialInitialized && mySerial.available() > 0);
 
     // Maintain WiFi connection
     if (WiFi.status() == WL_CONNECTED)
@@ -451,6 +380,11 @@ void loop()
         }
 
         if (mqttService == nullptr)
+        {
+            return;
+        }
+
+        if (otaService.isPrepared())
         {
             return;
         }
@@ -469,8 +403,20 @@ void loop()
         if (timeService.ensureUtcTimeSynced())
         {
             String timestamp = timeService.getUtcTimestamp();
-            publishTemperatureSensorValue(now, lastSentMqttPublish, timestamp);
-            publishBatterySensorValue(now, lastSentMqttPublish, timestamp);
+            TemperatureSensor::publishSensorValue(
+                mqttService->getClient(),
+                tempSensorId,
+                SENSOR_VALUE_TOPIC,
+                timestamp,
+                now,
+                lastSentMqttPublish);
+            BatteryLevel::publishSensorValue(
+                mqttService->getClient(),
+                batterySensorId,
+                SENSOR_VALUE_TOPIC,
+                timestamp,
+                now,
+                lastSentMqttPublish);
             lastSentMqttPublish = now;
         }
     }

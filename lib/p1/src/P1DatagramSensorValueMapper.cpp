@@ -84,6 +84,7 @@ String toUtcTimestamp(const String &p1Timestamp)
     snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
     return String(buffer);
 }
+
 } // namespace
 
 std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device device, const P1Datagram &datagram)
@@ -96,7 +97,8 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device d
         sv.setSensorId(sensor.getSensorId());
         sv.setTimestamp(toUtcTimestamp(datagram.getTimestamp()));
 
-        sv.setValue(getValueFromDatagram(sensor, datagram));
+        double value = getValueFromDatagram(sensor, datagram);
+        sv.setValue(value);
         sensorValues.push_back(sv);
     }
 

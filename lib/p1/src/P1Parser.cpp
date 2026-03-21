@@ -1,6 +1,43 @@
 #include "P1Parser.h"
 #include <string>
 
+namespace
+{
+String extractTag(const String &line)
+{
+    int openParenIndex = line.indexOf('(');
+    if (openParenIndex < 0)
+    {
+        return line;
+    }
+
+    return line.substring(0, openParenIndex);
+}
+
+String extractData(const P1Standard &p1Standard, const String &line)
+{
+    if (p1Standard.getId() == CONSUMED_GAS)
+    {
+        int firstClose = line.indexOf(')');
+        int secondOpen = line.indexOf('(', firstClose);
+        if (secondOpen != -1)
+        {
+            return line.substring(secondOpen + 1, line.lastIndexOf(')'));
+        }
+        return "";
+    }
+
+    int openParenIndex = line.indexOf('(');
+    int closeParenIndex = line.lastIndexOf(')');
+    if (openParenIndex < 0 || closeParenIndex <= openParenIndex)
+    {
+        return "";
+    }
+
+    return line.substring(openParenIndex + 1, closeParenIndex);
+}
+}
+
 P1Datagram P1Parser::parse(const String &p1Message)
 {
     P1Datagram datagram;
@@ -14,23 +51,19 @@ P1Datagram P1Parser::parse(const String &p1Message)
     for (; lineIter != endIter; ++lineIter)
     {
         String line = lineIter->str().c_str();
+        line.trim();
+        if (line.length() == 0 || line[0] == '/' || line[0] == '!')
+        {
+            continue;
+        }
+
         // Process each line based on its tag
-        auto p1StandardOpt = P1Standard::getByTag(line.substring(0, line.indexOf('(')));
+        String tag = extractTag(line);
+        auto p1StandardOpt = P1Standard::getByTag(tag);
         if (p1StandardOpt)
         {
             P1Standard p1Standard = *p1StandardOpt;
-            String data;
-            
-            // For CONSUMED_GAS, extract value from second pair of parentheses
-            if (p1Standard.getId() == CONSUMED_GAS) {
-                int firstClose = line.indexOf(')');
-                int secondOpen = line.indexOf('(', firstClose);
-                if (secondOpen != -1) {
-                    data = line.substring(secondOpen + 1, line.lastIndexOf(')'));
-                }
-            } else {
-                data = line.substring(line.indexOf('(') + 1, line.lastIndexOf(')'));
-            }
+            String data = extractData(p1Standard, line);
 
             switch (p1Standard.getId())
             {
@@ -106,5 +139,6 @@ P1Datagram P1Parser::parse(const String &p1Message)
             }
         }
     }
+
     return datagram;
 }
