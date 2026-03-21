@@ -44,6 +44,7 @@ public:
 
     long getSensorIdByType(SensorType type);
     bool hasUnassignedSensors() const;
+    String toString(bool pretty = false) const;
     static bool hasUnassignedSensors(const Device& device) { return device.hasUnassignedSensors(); }
 
     // Setters

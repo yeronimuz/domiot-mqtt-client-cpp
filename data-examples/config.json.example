@@ -10,5 +10,9 @@
     "user": "johndoe",
     "password": "secret",
     "client_id": "domiot-p1"
+  },
+  "ota": {
+    "username": "johndoe",
+    "password": "secret"
   }
 }

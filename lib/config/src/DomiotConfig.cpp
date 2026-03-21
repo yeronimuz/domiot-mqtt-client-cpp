@@ -2,6 +2,33 @@
 #include <ArduinoJson.h>
 #include "Device.h"
 
+static String sanitizeOptionalConfigString(String value)
+{
+    value.trim();
+    if (value.equalsIgnoreCase("null") || value.equalsIgnoreCase("undefined"))
+    {
+        return "";
+    }
+
+    return value;
+}
+
+static void resolveOtaCredentials(const JsonDocument& doc, String& username, String& password)
+{
+    String otaUsername = sanitizeOptionalConfigString(doc["ota"]["username"] | "");
+    String otaPassword = sanitizeOptionalConfigString(doc["ota"]["password"] | "");
+
+    if (otaUsername.length() > 0 && otaPassword.length() > 0)
+    {
+        username = otaUsername;
+        password = otaPassword;
+        return;
+    }
+
+    username = "";
+    password = "";
+}
+
 DomiotConfig::DomiotConfig()
 {
     Serial.println("DomiotConfig::DomiotConfig() starting");
@@ -46,8 +73,6 @@ void DomiotConfig::getDomiotConfig()
             }
             else
             {
-                _domiotJson = doc;
-
                 _wifiConfig = WifiConfig(
                     doc["wifi"]["ssid"] | "",
                     doc["wifi"]["password"] | "",
@@ -59,6 +84,8 @@ void DomiotConfig::getDomiotConfig()
                     doc["mqtt"]["user"] | "",
                     doc["mqtt"]["password"] | "",
                     doc["mqtt"]["client_id"] | "");
+
+                resolveOtaCredentials(doc, _otaUsername, _otaPassword);
             }
         }
     }
@@ -81,13 +108,8 @@ void DomiotConfig::getDomiotConfig()
             return;
         }
 
-        // Print the raw file payload to aid serial debugging.
-        String deviceConfigContents = deviceFile.readString();
-        Serial.println("Contents of /device.json:");
-        Serial.println(deviceConfigContents);
-
         JsonDocument deviceDoc;
-        DeserializationError deviceError = deserializeJson(deviceDoc, deviceConfigContents);
+        DeserializationError deviceError = deserializeJson(deviceDoc, static_cast<Stream &>(deviceFile));
         if (deviceError)
         {
             Serial.print("deserializeJson() failed for /device.json: ");

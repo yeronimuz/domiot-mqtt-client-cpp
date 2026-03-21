@@ -5,29 +5,29 @@
 
 class P1Datagram {
 private:
-    byte versionInfo;
+    byte versionInfo = 0;
     String timestamp;
     String equipmentId;
-    double consumedPowerT1;
-    double consumedPowerT2;
-    double producedPowerT1;
-    double producedPowerT2;
-    byte currentTariff;
-    double actualPowerConsumed;
-    double actualPowerProduced;
-    byte powerFailsAnyPhase;
-    byte longPowerFailsAnyPhase;
+    double consumedPowerT1 = 0.0;
+    double consumedPowerT2 = 0.0;
+    double producedPowerT1 = 0.0;
+    double producedPowerT2 = 0.0;
+    byte currentTariff = 0;
+    double actualPowerConsumed = 0.0;
+    double actualPowerProduced = 0.0;
+    byte powerFailsAnyPhase = 0;
+    byte longPowerFailsAnyPhase = 0;
     String powerFailEventLog;
-    uint16_t voltageSagsInPhaseL1;
-    uint16_t voltageSagsInPhaseL2;
-    uint16_t textMessageCodes;
+    uint16_t voltageSagsInPhaseL1 = 0;
+    uint16_t voltageSagsInPhaseL2 = 0;
+    uint16_t textMessageCodes = 0;
     String textMessages;
-    double instantaneousCurrentL1;
-    double instantaneousActivePowerL1PlusP;
-    double instantaneousActivePowerL1MinP;
-    byte deviceType;
+    double instantaneousCurrentL1 = 0.0;
+    double instantaneousActivePowerL1PlusP = 0.0;
+    double instantaneousActivePowerL1MinP = 0.0;
+    byte deviceType = 0;
     String key;
-    double consumedGas;
+    double consumedGas = 0.0;
 
 public:
     P1Datagram() = default;

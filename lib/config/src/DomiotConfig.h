@@ -13,8 +13,8 @@ class DomiotConfig
         WifiConfig _wifiConfig;
         MqttConfig _mqttConfig;
         Device _device;
-        // Intermediate json object with wifi and mqtt data
-        JsonDocument _domiotJson;
+        String _otaUsername;
+        String _otaPassword;
 
         void getDomiotConfig();
 
@@ -22,6 +22,8 @@ class DomiotConfig
         DomiotConfig();
         WifiConfig getWifiConfig() { return _wifiConfig; }
         MqttConfig getMqttConfig() { return _mqttConfig; }
+        String getOtaUsername() { return _otaUsername; }
+        String getOtaPassword() { return _otaPassword; }
         Device getDevice() { return _device; };
 
 };

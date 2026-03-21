@@ -218,10 +218,26 @@ static bool anyToString(const std::any& value, String& outString)
     return false;
 }
 
+static void writeNullableString(JsonObject targetObject, const char* key, const String& value)
+{
+    if (value.length() == 0) {
+        targetObject[key] = nullptr;
+        return;
+    }
+
+    targetObject[key] = value;
+}
+
+static String readNullableString(JsonVariantConst value)
+{
+    const char* text = value.as<const char*>();
+    return (text == nullptr) ? String("") : String(text);
+}
+
 static void writeConfigParameterToJson(const ConfigParameter& param, JsonObject& paramObj)
 {
-    paramObj["name"] = param.getName();
-    paramObj["parameterType"] = param.getParameterType();
+    writeNullableString(paramObj, "name", param.getName());
+    writeNullableString(paramObj, "parameterType", param.getParameterType());
 
     switch (getParamType(param.getParameterType())) {
         case ParamType::NUMBER: {
@@ -245,10 +261,10 @@ static void writeConfigParameterToJson(const ConfigParameter& param, JsonObject&
         case ParamType::STRING:
         default: {
             String textValue;
-            if (anyToString(param.getValue(), textValue)) {
+            if (anyToString(param.getValue(), textValue) && textValue.length() > 0) {
                 paramObj["value"] = textValue;
             } else {
-                paramObj["value"] = "";
+                paramObj["value"] = nullptr;
             }
             break;
         }
@@ -268,6 +284,9 @@ long Device::getSensorIdByType(SensorType type) {
 
 bool Device::hasUnassignedSensors() const
 {
+    if (_sensors.empty()) {
+        return true;
+    }
     for (const Sensor& sensor : _sensors) {
         if (sensor.getSensorId() <= 0) {
             return true;
@@ -275,6 +294,20 @@ bool Device::hasUnassignedSensors() const
     }
 
     return false;
+}
+
+String Device::toString(bool pretty) const
+{
+    JsonDocument doc;
+    Device::toJson(*this, doc);
+
+    String serialized;
+    if (pretty) {
+        serializeJsonPretty(doc, serialized);
+    } else {
+        serializeJson(doc, serialized);
+    }
+    return serialized;
 }
 
 Device Device::fromJson(const JsonObject& json) {
@@ -304,7 +337,7 @@ Device Device::fromJson(const JsonObject& json) {
                     break;
                 case ParamType::STRING:
                 default:
-                    param.setValue(String(paramObj["value"].as<const char*>()));
+                    param.setValue(readNullableString(paramObj["value"]));
                     break;
             }
             
@@ -347,7 +380,7 @@ Device Device::fromJson(const JsonObject& json) {
                             break;
                         case ParamType::STRING:
                         default:
-                            param.setValue(String(paramObj["value"].as<const char*>()));
+                            param.setValue(readNullableString(paramObj["value"]));
                             break;
                     }
                     
@@ -368,51 +401,71 @@ void Device::toJson(const Device& device, JsonDocument& doc)
 {
     JsonObject root = doc.to<JsonObject>();
 
-    root["manufacturerId"] = device.getManufacturerId();
-    root["modelId"] = device.getModelId();
-    root["firmwareVersion"] = device.getFirmwareVersion();
-    root["hardwareVersion"] = device.getHardwareVersion();
-    root["macAddress"] = device.getMacAddress();
+    writeNullableString(root, "manufacturerId", device.getManufacturerId());
+    writeNullableString(root, "modelId", device.getModelId());
+    writeNullableString(root, "firmwareVersion", device.getFirmwareVersion());
+    writeNullableString(root, "hardwareVersion", device.getHardwareVersion());
+    writeNullableString(root, "macAddress", device.getMacAddress());
 
-    JsonArray parametersArray = root["parameters"].to<JsonArray>();
-    for (const ConfigParameter& param : device.getParameters()) {
-        JsonObject paramObj = parametersArray.add<JsonObject>();
-        writeConfigParameterToJson(param, paramObj);
-    }
-
-    JsonArray sensorsArray = root["sensors"].to<JsonArray>();
-    for (const Sensor& sensor : device.getSensors()) {
-        JsonObject sensorObj = sensorsArray.add<JsonObject>();
-        sensorObj["sensorId"] = sensor.getSensorId();
-        sensorObj["deviceMac"] = sensor.getDeviceMac();
-        sensorObj["type"] = sensor.getType().getDescription();
-
-        JsonObject topicObj = sensorObj["topic"].to<JsonObject>();
-        topicObj["type"] = sensor.getTopic().getType();
-        topicObj["path"] = sensor.getTopic().getPath();
-
-        JsonArray sensorParamsArray = sensorObj["parameters"].to<JsonArray>();
-        for (const ConfigParameter& param : sensor.getParameters()) {
-            JsonObject paramObj = sensorParamsArray.add<JsonObject>();
+    if (device.getParameters().empty()) {
+        root["parameters"] = nullptr;
+    } else {
+        JsonArray parametersArray = root["parameters"].to<JsonArray>();
+        for (const ConfigParameter& param : device.getParameters()) {
+            JsonObject paramObj = parametersArray.add<JsonObject>();
             writeConfigParameterToJson(param, paramObj);
         }
     }
 
-    JsonArray actuatorsArray = root["actuators"].to<JsonArray>();
-    for (const Actuator& actuator : device.getActuators()) {
-        JsonObject actuatorObj = actuatorsArray.add<JsonObject>();
-        actuatorObj["actuatorId"] = actuator.getActuatorId();
-        actuatorObj["deviceMac"] = actuator.getDeviceMac();
-        actuatorObj["type"] = actuator.getType();
+    if (device.getSensors().empty()) {
+        root["sensors"] = nullptr;
+    } else {
+        JsonArray sensorsArray = root["sensors"].to<JsonArray>();
+        for (const Sensor& sensor : device.getSensors()) {
+            JsonObject sensorObj = sensorsArray.add<JsonObject>();
+            sensorObj["sensorId"] = sensor.getSensorId();
+            writeNullableString(sensorObj, "deviceMac", sensor.getDeviceMac());
+            writeNullableString(sensorObj, "type", sensor.getType().getDescription());
 
-        JsonObject topicObj = actuatorObj["topic"].to<JsonObject>();
-        topicObj["type"] = actuator.getTopic().getType();
-        topicObj["path"] = actuator.getTopic().getPath();
+            JsonObject topicObj = sensorObj["topic"].to<JsonObject>();
+            writeNullableString(topicObj, "type", sensor.getTopic().getType());
+            writeNullableString(topicObj, "path", sensor.getTopic().getPath());
 
-        JsonArray actuatorParamsArray = actuatorObj["parameters"].to<JsonArray>();
-        for (const ConfigParameter& param : actuator.getParameters()) {
-            JsonObject paramObj = actuatorParamsArray.add<JsonObject>();
-            writeConfigParameterToJson(param, paramObj);
+            if (sensor.getParameters().empty()) {
+                sensorObj["parameters"] = nullptr;
+            } else {
+                JsonArray sensorParamsArray = sensorObj["parameters"].to<JsonArray>();
+                for (const ConfigParameter& param : sensor.getParameters()) {
+                    JsonObject paramObj = sensorParamsArray.add<JsonObject>();
+                    writeConfigParameterToJson(param, paramObj);
+                }
+            }
+        }
+    }
+
+    if (device.getActuators().empty()) {
+        root["actuators"] = nullptr;
+    } else {
+        JsonArray actuatorsArray = root["actuators"].to<JsonArray>();
+        for (const Actuator& actuator : device.getActuators()) {
+            JsonObject actuatorObj = actuatorsArray.add<JsonObject>();
+            actuatorObj["actuatorId"] = actuator.getActuatorId();
+            writeNullableString(actuatorObj, "deviceMac", actuator.getDeviceMac());
+            writeNullableString(actuatorObj, "type", actuator.getType());
+
+            JsonObject topicObj = actuatorObj["topic"].to<JsonObject>();
+            writeNullableString(topicObj, "type", actuator.getTopic().getType());
+            writeNullableString(topicObj, "path", actuator.getTopic().getPath());
+
+            if (actuator.getParameters().empty()) {
+                actuatorObj["parameters"] = nullptr;
+            } else {
+                JsonArray actuatorParamsArray = actuatorObj["parameters"].to<JsonArray>();
+                for (const ConfigParameter& param : actuator.getParameters()) {
+                    JsonObject paramObj = actuatorParamsArray.add<JsonObject>();
+                    writeConfigParameterToJson(param, paramObj);
+                }
+            }
         }
     }
 }
