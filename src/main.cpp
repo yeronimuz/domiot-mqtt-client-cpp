@@ -12,10 +12,10 @@
 #include <P1Debug.h>
 #include <SensorValue.h>
 #include <vector>
+#include <map>
 #include "P1DatagramSensorValueMapper.h"
 #include <TimeService.h>
 
-#define MAX_WIFI_RETRIES 20
 #define SENSOR_VALUE_TOPIC "sensor"
 
 constexpr uint8_t DATA_LINE_LED_PIN = LED_BUILTIN;
@@ -23,12 +23,12 @@ constexpr uint8_t DATA_LINE_LED_ACTIVE_LEVEL = LOW;
 constexpr uint8_t DATA_LINE_LED_IDLE_LEVEL = HIGH;
 constexpr unsigned long DATA_LINE_LED_FLASH_DURATION_MS = 35;
 constexpr unsigned long DATA_LINE_LED_FLASH_INTERVAL_MS = 100;
-constexpr int P1_SERIAL_RX_BUFFER_SIZE = 1024;
-constexpr int P1_SERIAL_ISR_BUFFER_SIZE = 1024;
+constexpr unsigned int P1_SERIAL_RX_BUFFER_SIZE = 1024;
+constexpr unsigned int P1_REPEAT_INTERVAL_MS = 60000;
 
 WiFiClient wifiClient;
 
-SoftwareSerial mySerial(SERIAL_RX, -1, true); // (RX, TX (one wire protocol), inverted)
+HardwareSerial &p1Serial = Serial;
 OTAService otaService;
 
 MqttService *mqttService = nullptr;
@@ -58,7 +58,7 @@ static String sanitizeConfigString(String value)
     return value;
 }
 
-static String resolveWifiHostname(WifiConfig& wifiConfig, MqttConfig& mqttConfig)
+static String resolveWifiHostname(WifiConfig &wifiConfig, MqttConfig &mqttConfig)
 {
     String wifiHostname = sanitizeConfigString(wifiConfig.getWifiHostname());
     if (wifiHostname.length() == 0)
@@ -74,35 +74,33 @@ static String resolveWifiHostname(WifiConfig& wifiConfig, MqttConfig& mqttConfig
 
 static void logNetworkInfo()
 {
-    Serial.printf("WiFi hostname: %s\n", WiFi.hostname().c_str());
-    Serial.printf("WiFi MAC: %s\n", WiFi.macAddress().c_str());
-    Serial.printf("WiFi local IP: %s\n", WiFi.localIP().toString().c_str());
-    Serial.printf("WiFi subnet mask: %s\n", WiFi.subnetMask().toString().c_str());
-    Serial.printf("WiFi gateway IP: %s\n", WiFi.gatewayIP().toString().c_str());
-    Serial.printf("WiFi DNS: %s\n", WiFi.dnsIP().toString().c_str());
+    Serial.printf("WiFi hostname: %s\r\n", WiFi.hostname().c_str());
+    Serial.printf("WiFi MAC: %s\r\n", WiFi.macAddress().c_str());
+    Serial.printf("WiFi local IP: %s\r\n", WiFi.localIP().toString().c_str());
+    Serial.printf("WiFi subnet mask: %s\r\n", WiFi.subnetMask().toString().c_str());
+    Serial.printf("WiFi gateway IP: %s\r\n", WiFi.gatewayIP().toString().c_str());
+    Serial.printf("WiFi DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
 }
 
 static void initWifiDiagnostics()
 {
-    wifiGotIpEventHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event)
-    {
+    wifiGotIpEventHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP &event)
+                                                    {
         wifiConnectionEstablished = true;
         wifiAddressLogged = true;
-        Serial.printf("DHCP assigned IP: %s\n", event.ip.toString().c_str());
-        Serial.printf("DHCP subnet mask: %s\n", event.mask.toString().c_str());
-        Serial.printf("DHCP gateway: %s\n", event.gw.toString().c_str());
-    });
+        Serial.printf("DHCP assigned IP: %s\r\n", event.ip.toString().c_str());
+        Serial.printf("DHCP subnet mask: %s\r\n", event.mask.toString().c_str());
+        Serial.printf("DHCP gateway: %s\r\n", event.gw.toString().c_str()); });
 
-    wifiDisconnectedEventHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected& event)
-    {
+    wifiDisconnectedEventHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &event)
+                                                                  {
         if (!wifiConnectionEstablished)
         {
             return;
         }
 
         wifiAddressLogged = false;
-        Serial.printf("WiFi disconnected (reason=%d, ssid=%s)\n", event.reason, event.ssid.c_str());
-    });
+        Serial.printf("WiFi disconnected (reason=%d, ssid=%s)\r\n", event.reason, event.ssid.c_str()); });
 }
 
 void initDataLineActivityLed()
@@ -136,27 +134,21 @@ static void setupP1Serial()
         return;
     }
 
-    mySerial.begin(
-        115200,
-        SWSERIAL_8N1,
-        SERIAL_RX,
-        -1,
-        true,
-        P1_SERIAL_RX_BUFFER_SIZE,
-        P1_SERIAL_ISR_BUFFER_SIZE);
-    mySerial.setTimeout(250); // Keep line reads responsive; P1 lines should end quickly.
-    while (mySerial.available())
+    p1Serial.setRxBufferSize(P1_SERIAL_RX_BUFFER_SIZE);
+    p1Serial.begin(115200);
+    p1Serial.setTimeout(250); // Keep line reads responsive; P1 lines should end quickly.
+    while (p1Serial.available())
     {
-        mySerial.read();
+        p1Serial.read();
     }
 
     p1SerialInitialized = true;
-    Serial.printf("P1 serial port initialized (buffer=%d, isr=%d, free heap=%lu, max block=%lu)\n",
+    Serial.printf("P1 serial initialized: (buffer=%d, free heap=%lu, max block=%lu)\r\n",
                   P1_SERIAL_RX_BUFFER_SIZE,
-                  P1_SERIAL_ISR_BUFFER_SIZE,
                   static_cast<unsigned long>(ESP.getFreeHeap()),
                   static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
 }
+
 
 void setup()
 {
@@ -164,7 +156,8 @@ void setup()
     initDataLineActivityLed();
     delay(1000);
     Serial.println("\n\nStarting Domiot MQTT Client...");
-    otaService.attachP1Serial(&mySerial, &p1SerialInitialized, setupP1Serial);
+
+    otaService.attachP1Serial(&p1Serial, &p1SerialInitialized, setupP1Serial);
 
     WifiConfig wifiConfig;
     MqttConfig mqttConfig;
@@ -179,14 +172,14 @@ void setup()
         otaPassword = sanitizeConfigString(config.getOtaPassword());
         device = config.getDevice();
     }
-    Serial.printf("Free heap after config load: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+    Serial.printf("Free heap after config load: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
 
-    // For registration purposes, we need to set the MAC address in the device config, as it's used as a unique identifier for the device. 
+    // For registration purposes, we need to set the MAC address in the device config, as it's used as a unique identifier for the device.
     device.setMacAddress(WiFi.macAddress());
 
     if (strlen(wifiConfig.getWifiAccessPoint().c_str()) > 0)
     {
-        Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
+        Serial.printf("Connecting to WiFi (%s)...\r\n", wifiConfig.getWifiAccessPoint().c_str());
         WiFi.mode(WIFI_STA);
         WiFi.setAutoReconnect(true);
         WiFi.persistent(false);
@@ -194,7 +187,7 @@ void setup()
 
         String wifiHostname = resolveWifiHostname(wifiConfig, mqttConfig);
         WiFi.hostname(wifiHostname);
-        Serial.printf("Using WiFi hostname: %s\n", wifiHostname.c_str());
+        Serial.printf("Using WiFi hostname: %s\r\n", wifiHostname.c_str());
 
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
         Serial.println("WiFi connection initiated (non-blocking)");
@@ -210,7 +203,7 @@ void setup()
 
         if (WiFi.status() != WL_CONNECTED)
         {
-            Serial.printf("\nWiFi connection failed after %d retries. Setting up WiFi-less mode (OTA only).\n", wifiRetries);
+            Serial.printf("\nWiFi connection failed after %d retries. Setting up WiFi-less mode (OTA only).\r\n", wifiRetries);
             otaService.begin(otaUsername, otaPassword);
             Serial.println("Setup complete!");
             return;
@@ -249,7 +242,7 @@ void setup()
         if (device.hasUnassignedSensors())
         {
             Serial.println("One or more sensorIds are not assigned, registering device...");
-            Serial.printf("Free heap before registration: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+            Serial.printf("Free heap before registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
             mqttService->registerDevice(device);
             Serial.println("Device registration initiated, waiting for sensor ID assignment...");
             int retryCount = 0;
@@ -268,15 +261,16 @@ void setup()
 
                 delay(100);
                 retryCount++;
-                if (retryCount > 50) { // Timeout after 5 seconds
+                if (retryCount > 50)
+                { // Timeout after 5 seconds
                     Serial.println("Timeout waiting for sensor ID assignment.");
                     Serial.println("Re-registering device...");
-                    Serial.printf("Free heap before re-registration: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+                    Serial.printf("Free heap before re-registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
                     mqttService->registerDevice(device);
                     retryCount = 0;
                 }
             }
-            Serial.printf("Free heap after registration: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+            Serial.printf("Free heap after registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
             Serial.println("Sensor ID assignment completed.");
             // Update sensorIds after registration
             tempSensorId = device.getSensorIdByType(SensorType::TEMP);
@@ -289,8 +283,8 @@ void setup()
 
         // Temporarily release MQTT resources to free heap for OTA auth processing
         // OTA needs heap for digest auth computation; we'll reconnect in the loop if needed
-        Serial.printf("Free heap before OTA: %lu\n", static_cast<unsigned long>(ESP.getFreeHeap()));
-        
+        Serial.printf("Free heap before OTA: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+
         otaService.begin(otaUsername, otaPassword);
     }
     else
@@ -313,60 +307,66 @@ void publishP1SensorValues()
 
     if (device.getSensorIdByType(SensorType::POWER_CT1) != 0)
     {
-        static unsigned long lastValidDatagramMillis = 0;
-        static unsigned long lastP1StatusLogMillis = 0;
-
         // Read P1 data continuously to avoid dropping bytes from the serial buffer.
-        P1Datagram p1Datagram = P1Reader::readDatagram(mySerial);
+        P1Datagram p1Datagram = P1Reader::readDatagram(p1Serial);
 
-        // Consider a datagram valid when at least one core header field is parsed.
-        bool hasCoreP1Fields =
-            p1Datagram.getTimestamp().length() > 0 ||
-            p1Datagram.getVersionInfo() != 0 ||
-            p1Datagram.getEquipmentId().length() > 0;
-
-        if (!hasCoreP1Fields)
+        double gas = p1Datagram.getConsumedGas();
+        if (gas > 0)
         {
-            unsigned long now = millis();
-            if (now - lastP1StatusLogMillis >= 5000)
+            String dateTime = p1Datagram.getTimestamp();
+            if (dateTime.length() == 0)
             {
-                lastP1StatusLogMillis = now;
-                unsigned long msSinceLastDatagram =
-                    (lastValidDatagramMillis == 0) ? 0 : (now - lastValidDatagramMillis);
-                Serial.printf("P1 waiting for valid frame (avail=%d, ms_since_last=%lu)\n",
-                              mySerial.available(),
-                              msSinceLastDatagram);
+                Serial.println("P1: frame complete but missing timestamp; dropping corrupt frame");
+                return;
             }
-            return;
-        }
 
-        lastValidDatagramMillis = millis();
-        Serial.printf("P1 datagram received (ts=%s, version=%u)\n",
-                      p1Datagram.getTimestamp().c_str(),
-                      p1Datagram.getVersionInfo());
+            Serial.printf("%s: Valid datagram read with gas consumption: %.3f m3\r\n", dateTime.c_str(), gas);
+            Serial.printf("P1 datagram received (ts=%s, version=%u)\r\n",
+                          p1Datagram.getTimestamp().c_str(),
+                          p1Datagram.getVersionInfo());
 
-        // Map P1Datagram to SensorValues and publish
-        std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
+            // Map P1Datagram to SensorValues and publish
+            std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
 
-        for (SensorValue sv : sensorValues)
-        {
-            String payload = sv.toJson();
-            P1_DEBUG_PRINTF("P1 publish: %s\n", payload.c_str());
-            mqttService->getClient().publish(
-                SENSOR_VALUE_TOPIC,
-                reinterpret_cast<const uint8_t *>(payload.c_str()),
-                payload.length());
+            // Track last published value and time per sensor to:
+            //  - drop repeated values within the repeat interval
+            //  - force republish after the repeat interval even when unchanged
+            static std::map<long, std::pair<float, unsigned long>> lastPublished;
+            const unsigned long nowMs = millis();
+
+            for (SensorValue sv : sensorValues)
+            {
+                long id = sv.getSensorId();
+                float val = sv.getValue();
+                auto it = lastPublished.find(id);
+                bool valueChanged = (it == lastPublished.end()) || (it->second.first != val);
+                bool intervalElapsed = (it == lastPublished.end()) || (nowMs - it->second.second >= P1_REPEAT_INTERVAL_MS);
+
+                if (!valueChanged && !intervalElapsed)
+                {
+                    P1_DEBUG_PRINTF("P1 skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", id, val);
+                    continue;
+                }
+
+                String payload = sv.toJson();
+                P1_DEBUG_PRINTF("P1 publish: %s\r\n", payload.c_str());
+                mqttService->getClient().publish(
+                    SENSOR_VALUE_TOPIC,
+                    reinterpret_cast<const uint8_t *>(payload.c_str()),
+                    payload.length());
+                lastPublished[id] = {val, nowMs};
+            }
         }
     }
 }
 
 void loop()
 {
+
     otaService.loop();
     yield();
 
-
-    flashDataLineLedOnActivity(p1SerialInitialized && mySerial.available() > 0);
+    flashDataLineLedOnActivity(p1SerialInitialized && p1Serial.available() > 0);
 
     // Maintain WiFi connection
     if (WiFi.status() == WL_CONNECTED)
@@ -375,7 +375,7 @@ void loop()
         {
             wifiConnectionEstablished = true;
             wifiAddressLogged = true;
-            Serial.printf("WiFi connected, DHCP IP: %s\n", WiFi.localIP().toString().c_str());
+            Serial.printf("WiFi connected, DHCP IP: %s\r\n", WiFi.localIP().toString().c_str());
             logNetworkInfo();
         }
 

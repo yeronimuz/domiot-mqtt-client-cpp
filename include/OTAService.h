@@ -4,7 +4,6 @@
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTA.h>
-#include <SoftwareSerial.h>
 
 class MqttService;
 
@@ -17,7 +16,7 @@ public:
 
     void setMqttService(MqttService *mqttService);
     void attachP1Serial(
-        SoftwareSerial *p1Serial,
+        HardwareSerial *p1Serial,
         bool *p1SerialInitialized,
         RestoreP1SerialCallback restoreP1SerialCallback);
     void begin(const String &otaUsername, const String &otaPassword);
@@ -32,7 +31,7 @@ private:
 
     AsyncWebServer server;
     MqttService *mqttService;
-    SoftwareSerial *p1Serial;
+    HardwareSerial *p1Serial;
     bool *p1SerialInitialized;
     RestoreP1SerialCallback restoreP1SerialCallback;
     bool started;

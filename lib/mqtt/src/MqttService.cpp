@@ -55,7 +55,7 @@ void ensureConfigPacketBuffer(PubSubClient& mqttClient)
         const uint32_t freeHeapBefore = ESP.getFreeHeap();
         if (freeHeapBefore <= (target + MQTT_RUNTIME_HEAP_RESERVE_BYTES))
         {
-            Serial.printf("Skipping MQTT buffer resize to %u (free heap=%lu, reserve=%lu).\n",
+            Serial.printf("Skipping MQTT buffer resize to %u (free heap=%lu, reserve=%lu).\r\n",
                           target,
                           static_cast<unsigned long>(freeHeapBefore),
                           static_cast<unsigned long>(MQTT_RUNTIME_HEAP_RESERVE_BYTES));
@@ -64,18 +64,18 @@ void ensureConfigPacketBuffer(PubSubClient& mqttClient)
 
         if (mqttClient.setBufferSize(target))
         {
-            Serial.printf("MQTT buffer size set to %u (free heap=%lu).\n",
+            Serial.printf("MQTT buffer size set to %u (free heap=%lu).\r\n",
                           target,
                           static_cast<unsigned long>(freeHeapBefore));
             return;
         }
 
-        Serial.printf("Failed to increase MQTT packet buffer size to %u (free heap=%lu).\n",
+        Serial.printf("Failed to increase MQTT packet buffer size to %u (free heap=%lu).\r\n",
                       target,
                       static_cast<unsigned long>(freeHeapBefore));
     }
 
-    Serial.printf("Continuing with MQTT buffer size %u.\n", mqttClient.getBufferSize());
+    Serial.printf("Continuing with MQTT buffer size %u.\r\n", mqttClient.getBufferSize());
 #else
     if (!mqttClient.setBufferSize(CONFIG_PACKET_BUFFER_SIZE))
     {

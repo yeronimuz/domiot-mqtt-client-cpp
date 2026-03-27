@@ -51,7 +51,7 @@ void DomiotConfig::getDomiotConfig()
     Serial.println("DomiotConfig::getDomiotConfig() called");
 
     bool hasConfig = LittleFS.exists("/config.json");
-    Serial.printf("LittleFS /config.json exists: %s\n", hasConfig ? "yes" : "no");
+    Serial.printf("LittleFS /config.json exists: %s\r\n", hasConfig ? "yes" : "no");
 
     if (hasConfig)
     {
@@ -96,7 +96,7 @@ void DomiotConfig::getDomiotConfig()
 
     // Read device config from LittleFS when exists
     bool hasDeviceConfig = LittleFS.exists("/device.json");
-    Serial.printf("LittleFS /device.json exists: %s\n", hasDeviceConfig ? "yes" : "no");
+    Serial.printf("LittleFS /device.json exists: %s\r\n", hasDeviceConfig ? "yes" : "no");
 
     if (hasDeviceConfig)
     {

@@ -1,89 +1,122 @@
 #include "P1Reader.h"
 #include "P1Parser.h"
 
-#define MAXLINELENGTH 128 // longest normal line is 47 char (+3 for \r\n\0)
-
 namespace
 {
 constexpr unsigned long P1_READER_IDLE_TIMEOUT_MS = 30000;
+constexpr size_t P1_READER_MAX_DATAGRAM_LENGTH = 2048;
 }
 
-P1Datagram P1Reader::readDatagram(SoftwareSerial &serial)
+P1Datagram P1Reader::readDatagram(Stream &serial)
 {
     static String p1Message;
     static bool readingDatagram = false;
     static unsigned long lastByteTime = 0;
-    static unsigned int telegramLineCount = 0;
-    char telegram[MAXLINELENGTH + 1];
+    static char telegram[MAXLINELENGTH + 1];
+    static size_t telegramLen = 0;
+    static bool droppingOverlongLine = false;
+
     const unsigned long now = millis();
 
     // Reset state if stuck for > 30 seconds (allows meter restart/reconnect).
     if (readingDatagram && (now - lastByteTime > P1_READER_IDLE_TIMEOUT_MS))
     {
-        Serial.println("P1: idle timeout, resetting");
+        Serial.println("P1Reader: State timeout, resetting...");
         readingDatagram = false;
         p1Message = "";
-        telegramLineCount = 0;
+        telegramLen = 0;
+        droppingOverlongLine = false;
     }
 
     // Keep reading as long as bytes are available and emit exactly one completed telegram.
     while (serial.available() > 0)
     {
-        int len = serial.readBytesUntil('\n', telegram, MAXLINELENGTH);
-        if (len <= 0)
+        int raw = serial.read();
+        if (raw < 0)
         {
             yield();
             continue;
         }
 
-        telegram[len] = 0;
-        if (telegram[len - 1] == '\r')
-        {
-            telegram[len - 1] = 0;
-        }
-
-        // Synchronize to telegram start marker.
-        if (telegram[0] == '/')
-        {
-            if (readingDatagram && p1Message.length() > 0)
-            {
-                Serial.println("P1: restarting incomplete telegram");
-            }
-
-            p1Message = "";
-            readingDatagram = true;
-            lastByteTime = millis();
-            telegramLineCount = 0;
-            Serial.println("P1: telegram start");
-        }
-
-        if (!readingDatagram)
-        {
-            yield();
-            continue;
-        }
-
-        if (len == MAXLINELENGTH)
-        {
-            Serial.println("P1: line buffer overflow");
-        }
-
-        p1Message += telegram;
-        p1Message += '\n';
-        telegramLineCount++;
+        char ch = static_cast<char>(raw);
         lastByteTime = millis();
 
-        if (telegram[0] == '!')
+        // Process line when receiving CR or LF (handles CRLF and LF-only meters).
+        if (ch == '\r' || ch == '\n')
         {
-            Serial.print("P1: telegram complete, lines=");
-            Serial.println(telegramLineCount);
-            readingDatagram = false;
-            telegramLineCount = 0;
-            P1Datagram datagram = P1Parser::parse(p1Message);
-            return datagram;
+            if (droppingOverlongLine)
+            {
+                // Discard bytes until end-of-line, then resume normal parsing.
+                droppingOverlongLine = false;
+                telegramLen = 0;
+                continue;
+            }
+
+            if (telegramLen == 0)
+            {
+                continue;
+            }
+
+            telegram[telegramLen] = 0;
+            telegramLen = 0;
+
+            // Synchronize to telegram start marker.
+            if (telegram[0] == '/')
+            {
+                if (!readingDatagram)
+                {
+                    Serial.println("P1Reader: Telegram start detected.");
+                }
+                p1Message = "";
+                readingDatagram = true;
+            }
+
+            if (!readingDatagram)
+            {
+                yield();
+                continue;
+            }
+
+            p1Message += telegram;
+            p1Message += '\n';
+
+            if (p1Message.length() > P1_READER_MAX_DATAGRAM_LENGTH)
+            {
+                Serial.println("P1Reader: Datagram too long, dropping...");
+                readingDatagram = false;
+                p1Message = "";
+                yield();
+                continue;
+            }
+
+            if (telegram[0] == '!')
+            {
+                Serial.println("P1Reader: Telegram complete.");
+                readingDatagram = false;
+                P1Datagram datagram = P1Parser::parse(p1Message);
+                p1Message = "";
+                return datagram;
+            }
+
+            yield();
+            continue;
+        }
+
+        if (telegramLen < (MAXLINELENGTH - 1))
+        {
+            telegram[telegramLen++] = ch;
+        }
+        else
+        {
+            // Keep current datagram alive and skip only this oversized line.
+            if (!droppingOverlongLine)
+            {
+                Serial.println("P1Reader: Line overflow, skipping long line...");
+            }
+            droppingOverlongLine = true;
+            yield();
         }
     }
 
-    yield();
     return P1Datagram();
 }

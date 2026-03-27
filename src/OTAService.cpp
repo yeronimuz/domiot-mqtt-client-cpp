@@ -2,7 +2,6 @@
 
 #include <ESP8266WiFi.h>
 #include <MqttService.h>
-#include <SoftwareSerial.h>
 
 OTAService::OTAService(uint16_t port)
     : server(port),
@@ -25,7 +24,7 @@ void OTAService::setMqttService(MqttService *service)
 }
 
 void OTAService::attachP1Serial(
-    SoftwareSerial *serial,
+    HardwareSerial *serial,
     bool *serialInitialized,
     RestoreP1SerialCallback restoreSerialCallback)
 {
@@ -47,7 +46,7 @@ void OTAService::begin(const String &otaUsername, const String &otaPassword)
     server.on("/ota/prepare", HTTP_GET, [this](AsyncWebServerRequest *request)
     {
         prepareForUpdate();
-        Serial.printf("OTA prepare: MQTT freed (free heap=%lu, max block=%lu)\n",
+        Serial.printf("OTA prepare: MQTT freed (free heap=%lu, max block=%lu)\r\n",
                       static_cast<unsigned long>(ESP.getFreeHeap()),
                       static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
         request->send(200, "text/plain", "OK");
@@ -71,7 +70,7 @@ void OTAService::begin(const String &otaUsername, const String &otaPassword)
     server.begin();
     started = true;
 
-    Serial.printf("HTTP server started on port 80 (free heap=%lu, max block=%lu)\n",
+    Serial.printf("HTTP server started on port 80 (free heap=%lu, max block=%lu)\r\n",
                   static_cast<unsigned long>(ESP.getFreeHeap()),
                   static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
 }
@@ -153,7 +152,7 @@ void OTAService::handleStart()
     prepareStartMillis = millis();
     progressMillis = 0;
 
-    Serial.printf("OTA update started! (free heap=%lu, max block=%lu)\n",
+    Serial.printf("OTA update started! (free heap=%lu, max block=%lu)\r\n",
                   static_cast<unsigned long>(ESP.getFreeHeap()),
                   static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
 }
@@ -163,7 +162,7 @@ void OTAService::handleProgress(size_t current, size_t final)
     if (millis() - progressMillis > 1000)
     {
         progressMillis = millis();
-        Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+        Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\r\n", current, final);
     }
 }
 
