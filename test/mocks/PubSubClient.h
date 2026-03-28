@@ -34,7 +34,17 @@ public:
     static inline String lastPublishPayload = "";
     static inline unsigned int lastPublishLength = 0;
 
-    explicit PubSubClient(WiFiClient&) {}
+    PubSubClient() = default;
+
+    explicit PubSubClient(WiFiClient& client)
+        : _client(&client)
+    {
+    }
+
+    void setClient(WiFiClient& client)
+    {
+        _client = &client;
+    }
 
     void setServer(const char* server, uint16_t port)
     {
@@ -185,6 +195,7 @@ public:
     }
 
 private:
+    WiFiClient* _client = nullptr;
     MqttCallback _callback;
 };
 
