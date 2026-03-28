@@ -1,5 +1,4 @@
 #include "P1Parser.h"
-#include <string>
 
 namespace
 {
@@ -41,16 +40,20 @@ String extractData(const P1Standard &p1Standard, const String &line)
 P1Datagram P1Parser::parse(const String &p1Message)
 {
     P1Datagram datagram;
-    std::string message(p1Message.c_str());
 
-    // Split the message into lines
-    std::regex lineRegex("\r\n|\n");
-    std::sregex_token_iterator lineIter(message.begin(), message.end(), lineRegex, -1);
-    std::sregex_token_iterator endIter;
-
-    for (; lineIter != endIter; ++lineIter)
+    int start = 0;
+    const int messageLength = static_cast<int>(p1Message.length());
+    while (start < messageLength)
     {
-        String line = lineIter->str().c_str();
+        int end = p1Message.indexOf('\n', start);
+        if (end < 0)
+        {
+            end = p1Message.length();
+        }
+
+        String line = p1Message.substring(start, end);
+        start = end + 1;
+
         line.trim();
         if (line.length() == 0 || line[0] == '/' || line[0] == '!')
         {

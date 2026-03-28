@@ -1,6 +1,5 @@
 #pragma once
 #include <Arduino.h>
-#include <regex>
 #include "P1Datagram.h"
 #include "P1Standard.h"
 

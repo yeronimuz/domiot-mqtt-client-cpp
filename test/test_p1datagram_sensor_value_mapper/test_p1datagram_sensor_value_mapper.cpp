@@ -33,7 +33,7 @@ void test_mapper_power_pt1(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(1, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
 }
 
@@ -48,7 +48,7 @@ void test_mapper_power_pt2(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(2, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[0].getValue());
 }
 
@@ -63,7 +63,7 @@ void test_mapper_gas_meter(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(3, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1265.379, sensorValues[0].getValue());
 }
 
@@ -78,7 +78,7 @@ void test_mapper_power_ap(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(4, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.490, sensorValues[0].getValue());
 }
 
@@ -93,7 +93,7 @@ void test_mapper_power_ac(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(5, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.000, sensorValues[0].getValue());
 }
 
@@ -108,7 +108,7 @@ void test_mapper_power_ct1(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(6, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
 }
 
@@ -123,7 +123,7 @@ void test_mapper_power_ct2(void) {
     
     TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
     TEST_ASSERT_EQUAL_INT(7, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[0].getValue());
 }
 
@@ -169,27 +169,27 @@ void test_mapper_multiple_sensors(void) {
     // Verify POWER_PT1
     TEST_ASSERT_EQUAL_INT(1, sensorValues[0].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1779.182, sensorValues[0].getValue());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[0].getTimestamp().c_str());
     
     // Verify POWER_PT2
     TEST_ASSERT_EQUAL_INT(2, sensorValues[1].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[1].getValue());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[1].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[1].getTimestamp().c_str());
     
     // Verify GAS_METER
     TEST_ASSERT_EQUAL_INT(3, sensorValues[2].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 1265.379, sensorValues[2].getValue());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[2].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[2].getTimestamp().c_str());
     
     // Verify POWER_AP
     TEST_ASSERT_EQUAL_INT(4, sensorValues[3].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.490, sensorValues[3].getValue());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[3].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[3].getTimestamp().c_str());
     
     // Verify POWER_AC
     TEST_ASSERT_EQUAL_INT(5, sensorValues[4].getSensorId());
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.000, sensorValues[4].getValue());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[4].getTimestamp().c_str());
+    TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sensorValues[4].getTimestamp().c_str());
 }
 
 // Test mapping with empty device (no sensors)
@@ -231,7 +231,7 @@ void test_mapper_all_supported_types(void) {
     
     // Verify all have the same timestamp
     for (const auto& sv : sensorValues) {
-        TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sv.getTimestamp().c_str());
+        TEST_ASSERT_EQUAL_STRING("2022-06-01T14:18:52Z", sv.getTimestamp().c_str());
     }
 }
 

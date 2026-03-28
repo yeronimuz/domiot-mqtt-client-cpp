@@ -17,7 +17,7 @@
 #include <TimeService.h>
 
 #define SENSOR_VALUE_TOPIC "sensor"
-
+#define WIFI_CONNECTION_RETRIES 50
 constexpr uint8_t DATA_LINE_LED_PIN = LED_BUILTIN;
 constexpr uint8_t DATA_LINE_LED_ACTIVE_LEVEL = LOW;
 constexpr uint8_t DATA_LINE_LED_IDLE_LEVEL = HIGH;
@@ -25,6 +25,7 @@ constexpr unsigned long DATA_LINE_LED_FLASH_DURATION_MS = 35;
 constexpr unsigned long DATA_LINE_LED_FLASH_INTERVAL_MS = 100;
 constexpr unsigned int P1_SERIAL_RX_BUFFER_SIZE = 1024;
 constexpr unsigned int P1_REPEAT_INTERVAL_MS = 60000;
+constexpr unsigned int AUX_SENSOR_SAMPLE_INTERVAL_MS = 1000;
 
 WiFiClient wifiClient;
 
@@ -33,10 +34,7 @@ OTAService otaService;
 
 MqttService *mqttService = nullptr;
 Device device;
-long tempSensorId;
-long batterySensorId;
 
-unsigned long lastSentMqttPublish = 0;
 unsigned long dataLineLedOffMillis = 0;
 unsigned long lastDataLineFlashMillis = 0;
 TimeService timeService;
@@ -46,7 +44,39 @@ bool wifiAddressLogged = false;
 bool wifiConnectionEstablished = false;
 bool p1SerialInitialized = false;
 
+static std::map<long, std::pair<float, unsigned long>> lastPublishedValues;
+
 static void setupP1Serial();
+
+static bool shouldPublishSensorValue(long sensorId, float value, unsigned long nowMs)
+{
+    auto it = lastPublishedValues.find(sensorId);
+    bool valueChanged = (it == lastPublishedValues.end()) || (it->second.first != value);
+    bool intervalElapsed = (it == lastPublishedValues.end()) || (nowMs - it->second.second >= P1_REPEAT_INTERVAL_MS);
+
+    if (!valueChanged && !intervalElapsed)
+    {
+        return false;
+    }
+
+    lastPublishedValues[sensorId] = {value, nowMs};
+    return true;
+}
+
+static void publishSensorValue(long sensorId, const String &timestamp, float value)
+{
+    SensorValue sv;
+    sv.setSensorId(sensorId);
+    sv.setTimestamp(timestamp);
+    sv.setValue(value);
+
+    String payload = sv.toJson();
+    P1_DEBUG_PRINTF("Sensor publish: %s\r\n", payload.c_str());
+    mqttService->getClient().publish(
+        SENSOR_VALUE_TOPIC,
+        reinterpret_cast<const uint8_t *>(payload.c_str()),
+        payload.length());
+}
 
 static String sanitizeConfigString(String value)
 {
@@ -193,7 +223,7 @@ void setup()
 
         // Wait for WiFi to connect before attempting MQTT
         int wifiRetries = 0;
-        while (WiFi.status() != WL_CONNECTED)
+        while (WiFi.status() != WL_CONNECTED && wifiRetries < WIFI_CONNECTION_RETRIES)
         {
             delay(500);
             Serial.print(".");
@@ -272,13 +302,6 @@ void setup()
             }
             Serial.printf("Free heap after registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
             Serial.println("Sensor ID assignment completed.");
-            // Update sensorIds after registration
-            tempSensorId = device.getSensorIdByType(SensorType::TEMP);
-            batterySensorId = device.getSensorIdByType(SensorType::VOLTAGE_LEVEL);
-        }
-        else
-        {
-            Serial.println("Using configured sensor IDs from device configuration.");
         }
 
         // Temporarily release MQTT resources to free heap for OTA auth processing
@@ -307,78 +330,82 @@ void publishP1SensorValues()
 
     if (!device.hasUnassignedSensors())
     {
+        const unsigned long nowMs = millis();
+
         // Read P1 data continuously to avoid dropping bytes from the serial buffer.
         P1Datagram p1Datagram = P1Reader::readDatagram(p1Serial);
 
-        // The reader returns an empty placeholder datagram while a telegram is still
-        // being accumulated. Only publish completed, parsed telegrams.
-        if (p1Datagram.getTimestamp().length() == 0 || p1Datagram.getVersionInfo() == 0)
+        const bool hasValidP1Datagram = p1Datagram.getTimestamp().length() > 0 && p1Datagram.getVersionInfo() != 0;
+
+        if (hasValidP1Datagram)
         {
-            return;
-        }
+            // Map P1Datagram to SensorValues and publish
+            std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
 
-        // Map P1Datagram to SensorValues and publish
-        std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
-
-        // Track last published value and time per sensor to:
-        //  - drop repeated values within the repeat interval
-        //  - force republish after the repeat interval even when unchanged
-        static std::map<long, std::pair<float, unsigned long>> lastPublished;
-        const unsigned long nowMs = millis();
-
-        for (SensorValue sv : sensorValues)
-        {
-            long id = sv.getSensorId();
-            float val = sv.getValue();
-            auto it = lastPublished.find(id);
-            bool valueChanged = (it == lastPublished.end()) || (it->second.first != val);
-            bool intervalElapsed = (it == lastPublished.end()) || (nowMs - it->second.second >= P1_REPEAT_INTERVAL_MS);
-
-            if (!valueChanged && !intervalElapsed)
+            for (const SensorValue &sv : sensorValues)
             {
-                P1_DEBUG_PRINTF("P1 skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", id, val);
-                continue;
-            }
+                long id = sv.getSensorId();
+                float val = sv.getValue();
 
-            String payload = sv.toJson();
-            P1_DEBUG_PRINTF("P1 publish: %s\r\n", payload.c_str());
-            mqttService->getClient().publish(
-                SENSOR_VALUE_TOPIC,
-                reinterpret_cast<const uint8_t *>(payload.c_str()),
-                payload.length());
-            lastPublished[id] = {val, nowMs};
+                if (!shouldPublishSensorValue(id, val, nowMs))
+                {
+                    P1_DEBUG_PRINTF("P1 skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", id, val);
+                    continue;
+                }
+
+                publishSensorValue(id, sv.getTimestamp(), val);
+            }
+        }
+
+        // TEMP and VOLTAGE_LEVEL sensors are configured/registered in the same device model;
+        // publish them via the same dedup/repeat path, using device UTC time.
+        // Rate-limit ADC reads to once per second to avoid flooding MQTT with noise-induced micro-changes.
+        static unsigned long lastAuxSensorSampleMs = 0;
+        if (nowMs - lastAuxSensorSampleMs >= AUX_SENSOR_SAMPLE_INTERVAL_MS && timeService.ensureUtcTimeSynced())
+        {
+            lastAuxSensorSampleMs = nowMs;
+            const String timestamp = timeService.getUtcTimestamp();
+            const float temperature = TemperatureSensor::readTemperature();
+            const float batteryLevel = BatteryLevel::readBatteryLevel();
+
+            for (const Sensor &sensor : device.getSensors())
+            {
+                const long sensorId = sensor.getSensorId();
+                if (sensorId <= 0)
+                {
+                    continue;
+                }
+
+                float value = 0.0f;
+                bool supported = false;
+
+                if (sensor.getType() == SensorType::TEMP)
+                {
+                    value = temperature;
+                    supported = true;
+                }
+                else if (sensor.getType() == SensorType::VOLTAGE_LEVEL)
+                {
+                    value = batteryLevel;
+                    supported = true;
+                }
+
+                if (!supported)
+                {
+                    continue;
+                }
+
+                if (!shouldPublishSensorValue(sensorId, value, nowMs))
+                {
+                    P1_DEBUG_PRINTF("Aux skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", sensorId, value);
+                    continue;
+                }
+
+                publishSensorValue(sensorId, timestamp, value);
+            }
         }
     }
 }
-
-void publishBatteryLevelValue(unsigned long now)
-{
-    if (batterySensorId > 0 && timeService.ensureUtcTimeSynced())
-    {
-        BatteryLevel::publishSensorValue(
-            mqttService->getClient(),
-            batterySensorId,
-            SENSOR_VALUE_TOPIC,
-            timeService.getUtcTimestamp(),
-            now,
-            lastSentMqttPublish);
-    }
-}
-
-void publishTemperatureValue(unsigned long now)
-{
-    if (tempSensorId > 0 && timeService.ensureUtcTimeSynced())
-    {
-        TemperatureSensor::publishSensorValue(
-            mqttService->getClient(),
-            tempSensorId,
-            SENSOR_VALUE_TOPIC,
-            timeService.getUtcTimestamp(),
-            now,
-            lastSentMqttPublish);
-    }
-}
-
 
 void loop()
 {
@@ -416,12 +443,7 @@ void loop()
         }
         mqttService->getClient().loop();
 
-        unsigned long now = millis();
-
         publishP1SensorValues();
-        publishTemperatureValue(now);
-        publishBatteryLevelValue(now);
-        lastSentMqttPublish = now;
     }
     else
     {

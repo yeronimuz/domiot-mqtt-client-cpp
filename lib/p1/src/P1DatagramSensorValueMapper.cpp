@@ -109,7 +109,7 @@ String toUtcTimestamp(const String &p1Timestamp)
 
 } // namespace
 
-std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device device, const P1Datagram &datagram)
+std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(const Device& device, const P1Datagram &datagram)
 {
     std::vector<SensorValue> sensorValues;
 
@@ -132,7 +132,7 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device d
     return sensorValues;
 }
 
-double P1DatagramSensorValueMapper::getValueFromDatagram(Sensor sensor, P1Datagram datagram)
+double P1DatagramSensorValueMapper::getValueFromDatagram(const Sensor& sensor, const P1Datagram& datagram)
 {
     if (sensor.getType() != SensorType::NOT_USED)
     {
