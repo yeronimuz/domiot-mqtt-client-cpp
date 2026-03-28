@@ -51,11 +51,11 @@ String toUtcTimestamp(const String &p1Timestamp)
     int offsetHours = 0;
     if (dstFlag == 'W')
     {
-        offsetHours = 2;
+        offsetHours = 1;
     }
     else if (dstFlag == 'S')
     {
-        offsetHours = 1;
+        offsetHours = 2;
     }
     else
     {
@@ -75,6 +75,16 @@ String toUtcTimestamp(const String &p1Timestamp)
     int minute = digits.substring(8, 10).toInt();
     int second = digits.substring(10, 12).toInt();
 
+    // Basic range validation to guard against malformed input and
+    // prevent out-of-bounds access in daysInMonth().
+    if (month < 1 || month > 12 ||
+        day < 1 || day > 31 ||
+        hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 ||
+        second < 0 || second > 59)
+    {
+        return p1Timestamp;
+    }
     hour -= offsetHours;
     while (hour < 0)
     {

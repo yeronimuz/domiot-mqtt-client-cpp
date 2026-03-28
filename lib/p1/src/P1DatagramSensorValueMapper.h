@@ -9,7 +9,7 @@
 class P1DatagramSensorValueMapper
 {
 public:
-    static std::vector<SensorValue> mapToSensorValues(Device device, const P1Datagram& datagram);
+    static std::vector<SensorValue> mapToSensorValues(const Device& device, const P1Datagram& datagram);
 private:
-    static double getValueFromDatagram(Sensor sensor, P1Datagram datagram);
+    static double getValueFromDatagram(const Sensor& sensor, const P1Datagram& datagram);
 };

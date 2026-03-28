@@ -25,7 +25,7 @@ String* P1Datagram::getAsPayload()
     payloadParts[index++] = "\"instantaneousCurrentL1\": " + String(instantaneousCurrentL1, 2);
     payloadParts[index++] = "\"instantaneousActivePowerL1PlusP\": " + String(instantaneousActivePowerL1PlusP, 2);
     payloadParts[index++] = "\"instantaneousActivePowerL1MinP\": " + String(instantaneousActivePowerL1MinP, 2);
-    payloadParts[index++] = "\"deviceType\": \"" + deviceType;
+    payloadParts[index++] = "\"deviceType\": " + String(deviceType);
     payloadParts[index++] = "\"key\": \"" + key + "\"";
     payloadParts[index++] = "\"consumedGas\": " + String(consumedGas, 2);
     payloadParts[index++] = "\0";

@@ -24,9 +24,11 @@ class MqttService {
             _mqttUser(user),
             _mqttPassword(password),
             _clientId(clientId),
-            _wifiClient(wifiClient),
-            _mqttClient(*wifiClient)
+            _wifiClient(wifiClient)
         {
+            if (wifiClient != nullptr) {
+                _mqttClient.setClient(*wifiClient);
+            }
             _mqttClient.setServer(_mqttServer.c_str(), _mqttPort);
             _mqttClient.setCallback([this](char* topic, byte* payload, unsigned int length) {
                 this->callback(topic, payload, length);
