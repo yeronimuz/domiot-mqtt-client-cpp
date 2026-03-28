@@ -127,7 +127,7 @@ void test_mapper_power_ct2(void) {
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 2180.316, sensorValues[0].getValue());
 }
 
-// Test mapping with NOT_USED sensor type (should return 0.0)
+// Test mapping with NOT_USED sensor type (should be skipped)
 void test_mapper_not_used(void) {
     P1Datagram datagram = P1Parser::parse(String(TEST_P1_DATAGRAM));
     
@@ -136,13 +136,10 @@ void test_mapper_not_used(void) {
     
     std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
-    TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
-    TEST_ASSERT_EQUAL_INT(8, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
-    TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, sensorValues[0].getValue());
+    TEST_ASSERT_EQUAL_INT(0, sensorValues.size());
 }
 
-// Test mapping with unsupported sensor type (should return 0.0)
+// Test mapping with unsupported sensor type (should be skipped)
 void test_mapper_unsupported_type(void) {
     P1Datagram datagram = P1Parser::parse(String(TEST_P1_DATAGRAM));
     
@@ -151,10 +148,7 @@ void test_mapper_unsupported_type(void) {
     
     std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, datagram);
     
-    TEST_ASSERT_EQUAL_INT(1, sensorValues.size());
-    TEST_ASSERT_EQUAL_INT(9, sensorValues[0].getSensorId());
-    TEST_ASSERT_EQUAL_STRING("2022-06-01T15:18:52Z", sensorValues[0].getTimestamp().c_str());
-    TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, sensorValues[0].getValue());
+    TEST_ASSERT_EQUAL_INT(0, sensorValues.size());
 }
 
 // Test mapping with multiple sensors of different types

@@ -5,6 +5,18 @@
 
 namespace
 {
+bool isP1SensorType(const SensorType &sensorType)
+{
+    int typeId = sensorType.getId();
+    return typeId == SensorType::POWER_PT1.getId() ||
+           typeId == SensorType::POWER_PT2.getId() ||
+           typeId == SensorType::GAS_METER.getId() ||
+           typeId == SensorType::POWER_AP.getId() ||
+           typeId == SensorType::POWER_AC.getId() ||
+           typeId == SensorType::POWER_CT1.getId() ||
+           typeId == SensorType::POWER_CT2.getId();
+}
+
 bool isLeapYear(int year)
 {
     if (year % 400 == 0)
@@ -93,6 +105,11 @@ std::vector<SensorValue> P1DatagramSensorValueMapper::mapToSensorValues(Device d
 
     for (const Sensor &sensor : device.getSensors())
     {
+        if (!isP1SensorType(sensor.getType()) || sensor.getSensorId() <= 0)
+        {
+            continue;
+        }
+
         SensorValue sv;
         sv.setSensorId(sensor.getSensorId());
         sv.setTimestamp(toUtcTimestamp(datagram.getTimestamp()));
@@ -141,7 +158,7 @@ double P1DatagramSensorValueMapper::getValueFromDatagram(Sensor sensor, P1Datagr
         // Add more cases as needed...
         else
         {
-            return 0.0; // Unsupported type
+            return 0.0; // Unsupported type, filtered by mapToSensorValues
         }
     }
     return 0.0; // Type not used

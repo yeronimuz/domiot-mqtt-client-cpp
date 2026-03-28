@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <string>
 
 enum class ParamType {
     NUMBER,
@@ -301,13 +302,13 @@ String Device::toString(bool pretty) const
     JsonDocument doc;
     Device::toJson(*this, doc);
 
-    String serialized;
+    std::string serialized;
     if (pretty) {
         serializeJsonPretty(doc, serialized);
     } else {
         serializeJson(doc, serialized);
     }
-    return serialized;
+    return String(serialized.c_str());
 }
 
 Device Device::fromJson(const JsonObject& json) {
