@@ -31,6 +31,14 @@ bool TimeService::ensureUtcTimeSynced()
         return true;
     }
 
+    // Fast-path: time may already be synced asynchronously by lwIP SNTP.
+    if (isTimeSynced())
+    {
+        utcTimeSynced = true;
+        Serial.println("UTC time synchronized.");
+        return true;
+    }
+
     unsigned long now = millis();
     if (now - lastTimeSyncAttempt < retryIntervalMs)
     {
@@ -38,17 +46,11 @@ bool TimeService::ensureUtcTimeSynced()
     }
 
     lastTimeSyncAttempt = now;
-    syncUtcTime();
-    utcTimeSynced = isTimeSynced();
-    if (utcTimeSynced)
-    {
-        Serial.println("UTC time synchronized.");
-    }
-    else
-    {
-        Serial.println("UTC time not synchronized yet.");
-    }
-    return utcTimeSynced;
+
+    // Non-blocking retry: request SNTP update and return immediately.
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.println("UTC time sync requested (non-blocking).");
+    return false;
 }
 
 String TimeService::getUtcTimestamp() const
