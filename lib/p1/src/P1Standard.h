@@ -3,6 +3,10 @@
 #include <optional>
 #include <Arduino.h>
 
+/**
+ * This class represents the P1 standard for smart meters, defining the various data points that can be read from the meter.
+ * Refer to https://www.netbeheernederland.nl/sites/default/files/2024-02/dsmr_5.0.2_p1_companion_standard.pdf rt for details on the standard.
+ */
 enum P1Type {
     VERSION_INFO = 0,
     DATE_TIMESTAMP = 1,
@@ -75,7 +79,7 @@ public:
             P1Standard(LONG_PWR_FAILS_ANY_PHASE, "0-0:96.7.9", ""),
             P1Standard(PWR_FAIL_EVENT_LOG, "1-0:99.97.0", ""),
             P1Standard(VOLTAGE_SAGS_IN_PHASE_L1, "1-0:32.32.0", ""),
-            P1Standard(VOLTAGE_SAGS_IN_PHASE_L2, "1-0:32.36.0", ""),
+            P1Standard(VOLTAGE_SAGS_IN_PHASE_L2, "1-0:52.36.0", ""),
             P1Standard(TXT_MSG_CODES, "0-0:96.13.1", ""),
             P1Standard(TXT_MSG, "0-0:96.13.0", ""),
             P1Standard(INSTANTANEOUS_CURRENT_L1, "1-0:31.7.0", ""),

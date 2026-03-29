@@ -8,14 +8,14 @@ class MqttConfig
 {
 private:
     String _mqttBroker;
-    u_short _mqttPort;
+    uint16_t _mqttPort;
     String _mqttUser;
     String _mqttPassword;
     String _clientId;
 
 public:
     MqttConfig() : _mqttBroker(""), _mqttPort(DEFAULT_PORT), _mqttUser(""), _mqttPassword(""), _clientId("") {}
-    MqttConfig(String mqttBroker, u_short mqttPort, String mqttUser, String mqttPassword, String clientId)
+    MqttConfig(String mqttBroker, uint16_t mqttPort, String mqttUser, String mqttPassword, String clientId)
     {
         this->_mqttBroker = mqttBroker;
         this->_mqttUser = mqttUser;
@@ -25,7 +25,7 @@ public:
     }
 
     String getMqttBroker() { return _mqttBroker; }
-    u_short getMqttPort() { return _mqttPort; }
+    uint16_t getMqttPort() { return _mqttPort; }
     String getMqttUser() { return _mqttUser; }
     String getMqttPassword() { return _mqttPassword; }
     String getClientId() { return _clientId; }

@@ -12,7 +12,7 @@ P1Datagram P1Reader::readDatagram(Stream &serial)
     static String p1Message;
     static bool readingDatagram = false;
     static unsigned long lastByteTime = 0;
-    static char telegram[MAXLINELENGTH + 1];
+    static char telegram[MAXLINELENGTH];
     static size_t telegramLen = 0;
     static bool droppingOverlongLine = false;
 
