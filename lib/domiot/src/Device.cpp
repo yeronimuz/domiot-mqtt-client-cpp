@@ -479,7 +479,11 @@ void Device::writeDeviceJson(JsonDocument& doc)
         return;
     }
 
-    serializeJson(doc, file);
+    size_t bytesWritten = serializeJson(doc, file);
+    if (bytesWritten == 0) {
+        Serial.println("Failed to write JSON to device.json");
+    }
 
+    file.close();
     Serial.println("device.json written");
 }
