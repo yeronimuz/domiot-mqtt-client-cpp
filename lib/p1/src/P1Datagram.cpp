@@ -2,7 +2,7 @@
 
 String* P1Datagram::getAsPayload()
 {
-    String* payloadParts = new String[MAX_P1_ITEMS];
+    static String payloadParts[MAX_P1_ITEMS];
     int index = 0;
 
     payloadParts[index++] = "\"versionInfo\": " + String(versionInfo);
