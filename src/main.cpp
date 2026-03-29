@@ -1,179 +1,449 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h> // Use <WiFi.h> for ESP32
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <ElegantOTA.h>
 #include "constants.h"
+#include <OTAService.h>
 #include <TemperatureSensor.h>
 #include <BatteryLevel.h>
 #include <MqttService.h>
 #include <DomiotConfig.h>
+#include <P1Reader.h>
+#include <P1Datagram.h>
+#include <P1Debug.h>
+#include <SensorValue.h>
+#include <vector>
+#include <map>
+#include "P1DatagramSensorValueMapper.h"
+#include <TimeService.h>
 
-#define MAX_WIFI_RETRIES 20
-#define INCLUDE_TEMPERATURE_SENSOR false
-#define INCLUDE_BATTERY_LEVEL_SENSOR false
-
-/* Device's AP when not configured */
-const char *ssid = "TBD-SSID"; // AP SSID
-const char *password = "";     // No password
-
-AsyncWebServer server(80);
+#define SENSOR_VALUE_TOPIC "sensor"
+#define WIFI_CONNECTION_RETRIES 50
+constexpr uint8_t DATA_LINE_LED_PIN = LED_BUILTIN;
+constexpr uint8_t DATA_LINE_LED_ACTIVE_LEVEL = LOW;
+constexpr uint8_t DATA_LINE_LED_IDLE_LEVEL = HIGH;
+constexpr unsigned long DATA_LINE_LED_FLASH_DURATION_MS = 35;
+constexpr unsigned long DATA_LINE_LED_FLASH_INTERVAL_MS = 100;
+constexpr unsigned int P1_SERIAL_RX_BUFFER_SIZE = 1024;
+constexpr unsigned int P1_REPEAT_INTERVAL_MS = 60000;
+constexpr unsigned int AUX_SENSOR_SAMPLE_INTERVAL_MS = 1000;
 
 WiFiClient wifiClient;
 
-String deviceName = "ESP_Sensor";
-String deviceType = "TemperatureSensor";
+HardwareSerial &p1Serial = Serial;
+OTAService otaService;
 
-MqttService mqttService;
+MqttService *mqttService = nullptr;
 Device device;
 
-unsigned long ota_progress_millis = 0;
-float lastSentTemperature = 0.0;
-float lastSentBatteryLevel = 0.0;
-unsigned long lastMqttPublish = 0;
+unsigned long dataLineLedOffMillis = 0;
+unsigned long lastDataLineFlashMillis = 0;
+TimeService timeService;
+WiFiEventHandler wifiGotIpEventHandler;
+WiFiEventHandler wifiDisconnectedEventHandler;
+bool wifiAddressLogged = false;
+bool wifiConnectionEstablished = false;
+bool p1SerialInitialized = false;
 
-String getTimestamp()
-{
-    // Format timestamp as ISO 8601: "2025-03-17T21:55:59.524164121"
-    time_t now = time(nullptr);
-    struct tm *timeinfo = localtime(&now);
-    char timestamp_buffer[30];
-    strftime(timestamp_buffer, sizeof(timestamp_buffer), "%Y-%m-%dT%H:%M:%S", timeinfo);
-    unsigned long milliseconds = millis() % 1000;
-    return String(timestamp_buffer) + "." + String(milliseconds * 1000000, DEC);
-}
+static std::map<long, std::pair<float, unsigned long>> lastPublishedValues;
 
-void onOTAStart()
-{
-    Serial.println("OTA update started!");
-}
+static void setupP1Serial();
 
-void onOTAProgress(size_t current, size_t final)
+static bool shouldPublishSensorValue(long sensorId, float value, unsigned long nowMs)
 {
-    // Log every 1 second
-    if (millis() - ota_progress_millis > 1000)
+    auto it = lastPublishedValues.find(sensorId);
+    bool valueChanged = (it == lastPublishedValues.end()) || (it->second.first != value);
+    bool intervalElapsed = (it == lastPublishedValues.end()) || (nowMs - it->second.second >= P1_REPEAT_INTERVAL_MS);
+
+    if (!valueChanged && !intervalElapsed)
     {
-        ota_progress_millis = millis();
-        Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+        return false;
+    }
+
+    lastPublishedValues[sensorId] = {value, nowMs};
+    return true;
+}
+
+static void publishSensorValue(long sensorId, const String &timestamp, float value)
+{
+    SensorValue sv;
+    sv.setSensorId(sensorId);
+    sv.setTimestamp(timestamp);
+    sv.setValue(value);
+
+    String payload = sv.toJson();
+    P1_DEBUG_PRINTF("Sensor publish: %s\r\n", payload.c_str());
+    mqttService->getClient().publish(
+        SENSOR_VALUE_TOPIC,
+        reinterpret_cast<const uint8_t *>(payload.c_str()),
+        payload.length());
+}
+
+static String sanitizeConfigString(String value)
+{
+    value.trim();
+    if (value.equalsIgnoreCase("null") || value.equalsIgnoreCase("undefined"))
+    {
+        return "";
+    }
+    return value;
+}
+
+static String resolveWifiHostname(WifiConfig &wifiConfig, MqttConfig &mqttConfig)
+{
+    String wifiHostname = sanitizeConfigString(wifiConfig.getWifiHostname());
+    if (wifiHostname.length() == 0)
+    {
+        wifiHostname = sanitizeConfigString(mqttConfig.getClientId());
+    }
+    if (wifiHostname.length() == 0)
+    {
+        wifiHostname = "domiot-" + String(ESP.getChipId(), HEX);
+    }
+    return wifiHostname;
+}
+
+static void logNetworkInfo()
+{
+    Serial.printf("WiFi hostname: %s\r\n", WiFi.hostname().c_str());
+    Serial.printf("WiFi MAC: %s\r\n", WiFi.macAddress().c_str());
+    Serial.printf("WiFi local IP: %s\r\n", WiFi.localIP().toString().c_str());
+    Serial.printf("WiFi subnet mask: %s\r\n", WiFi.subnetMask().toString().c_str());
+    Serial.printf("WiFi gateway IP: %s\r\n", WiFi.gatewayIP().toString().c_str());
+    Serial.printf("WiFi DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
+}
+
+static void initWifiDiagnostics()
+{
+    wifiGotIpEventHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP &event)
+                                                    {
+        wifiConnectionEstablished = true;
+        wifiAddressLogged = true;
+        Serial.printf("DHCP assigned IP: %s\r\n", event.ip.toString().c_str());
+        Serial.printf("DHCP subnet mask: %s\r\n", event.mask.toString().c_str());
+        Serial.printf("DHCP gateway: %s\r\n", event.gw.toString().c_str()); });
+
+    wifiDisconnectedEventHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &event)
+                                                                  {
+        if (!wifiConnectionEstablished)
+        {
+            return;
+        }
+
+        wifiAddressLogged = false;
+        Serial.printf("WiFi disconnected (reason=%d, ssid=%s)\r\n", event.reason, event.ssid.c_str()); });
+}
+
+void initDataLineActivityLed()
+{
+    pinMode(DATA_LINE_LED_PIN, OUTPUT);
+    digitalWrite(DATA_LINE_LED_PIN, DATA_LINE_LED_IDLE_LEVEL);
+}
+
+void flashDataLineLedOnActivity(bool dataAvailable)
+{
+    const unsigned long now = millis();
+
+    if (dataAvailable && (now - lastDataLineFlashMillis >= DATA_LINE_LED_FLASH_INTERVAL_MS))
+    {
+        lastDataLineFlashMillis = now;
+        dataLineLedOffMillis = now + DATA_LINE_LED_FLASH_DURATION_MS;
+        digitalWrite(DATA_LINE_LED_PIN, DATA_LINE_LED_ACTIVE_LEVEL);
+    }
+
+    if (dataLineLedOffMillis != 0 && static_cast<long>(now - dataLineLedOffMillis) >= 0)
+    {
+        dataLineLedOffMillis = 0;
+        digitalWrite(DATA_LINE_LED_PIN, DATA_LINE_LED_IDLE_LEVEL);
     }
 }
 
-void onOTAEnd(bool success)
+static void setupP1Serial()
 {
-    if (success)
+    if (p1SerialInitialized)
     {
-        Serial.println("OTA update finished successfully!");
+        return;
     }
-    else
+
+    p1Serial.setRxBufferSize(P1_SERIAL_RX_BUFFER_SIZE);
+    p1Serial.begin(115200);
+    p1Serial.setTimeout(250); // Keep line reads responsive; P1 lines should end quickly.
+    while (p1Serial.available())
     {
-        Serial.println("There was an error during OTA update!");
+        p1Serial.read();
     }
-    // <Add your own code here>
+
+    p1SerialInitialized = true;
+    Serial.printf("P1 serial initialized: (buffer=%d, free heap=%lu, max block=%lu)\r\n",
+                  P1_SERIAL_RX_BUFFER_SIZE,
+                  static_cast<unsigned long>(ESP.getFreeHeap()),
+                  static_cast<unsigned long>(ESP.getMaxFreeBlockSize()));
 }
 
 void setup()
 {
     Serial.begin(115200);
+    initDataLineActivityLed();
     delay(1000);
     Serial.println("\n\nStarting Domiot MQTT Client...");
 
-    DomiotConfig config = DomiotConfig();
-    WifiConfig wifiConfig = config.getWifiConfig();
-    MqttConfig mqttConfig = config.getMqttConfig();
-    device = config.getDevice();
+    otaService.attachP1Serial(&p1Serial, &p1SerialInitialized, setupP1Serial);
 
-    // Setup web server routes before starting
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/plain", "Domiot Sensor update facility on /update."); });
+    WifiConfig wifiConfig;
+    MqttConfig mqttConfig;
+    String otaUsername;
+    String otaPassword;
 
-    // Setup ElegantOTA
-    ElegantOTA.begin(&server);
-    ElegantOTA.onStart(onOTAStart);
-    ElegantOTA.onProgress(onOTAProgress);
-    ElegantOTA.onEnd(onOTAEnd);
+    {
+        DomiotConfig config = DomiotConfig();
+        wifiConfig = config.getWifiConfig();
+        mqttConfig = config.getMqttConfig();
+        otaUsername = sanitizeConfigString(config.getOtaUsername());
+        otaPassword = sanitizeConfigString(config.getOtaPassword());
+        device = config.getDevice();
+    }
+    Serial.printf("Free heap after config load: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
 
-    // Start the server immediately (before WiFi connects)
-    server.begin();
-    Serial.println("HTTP server started on port 80");
+    // For registration purposes, we need to set the MAC address in the device config, as it's used as a unique identifier for the device.
+    device.setMacAddress(WiFi.macAddress());
 
     if (strlen(wifiConfig.getWifiAccessPoint().c_str()) > 0)
     {
-        Serial.printf("Connecting to WiFi (%s)...\n", wifiConfig.getWifiAccessPoint().c_str());
+        Serial.printf("Connecting to WiFi (%s)...\r\n", wifiConfig.getWifiAccessPoint().c_str());
         WiFi.mode(WIFI_STA);
+        WiFi.setAutoReconnect(true);
+        WiFi.persistent(false);
+        initWifiDiagnostics();
+
+        String wifiHostname = resolveWifiHostname(wifiConfig, mqttConfig);
+        WiFi.hostname(wifiHostname);
+        Serial.printf("Using WiFi hostname: %s\r\n", wifiHostname.c_str());
+
         WiFi.begin(wifiConfig.getWifiAccessPoint(), wifiConfig.getWifiPassKey());
         Serial.println("WiFi connection initiated (non-blocking)");
 
-        mqttService = MqttService(
+        // Wait for WiFi to connect before attempting MQTT
+        int wifiRetries = 0;
+        while (WiFi.status() != WL_CONNECTED && wifiRetries < WIFI_CONNECTION_RETRIES)
+        {
+            delay(500);
+            Serial.print(".");
+            wifiRetries++;
+        }
+
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            Serial.printf("\nWiFi connection failed after %d retries. Setting up WiFi-less mode (OTA only).\r\n", wifiRetries);
+            otaService.begin(otaUsername, otaPassword);
+            Serial.println("Setup complete!");
+            return;
+        }
+
+        Serial.println("\nWiFi connected!");
+
+        mqttService = new MqttService(
             mqttConfig.getMqttBroker(),
+            mqttConfig.getMqttPort(),
             mqttConfig.getMqttUser(),
             mqttConfig.getMqttPassword(),
+            mqttConfig.getClientId(),
             &wifiClient);
+        otaService.setMqttService(mqttService);
+
+        Serial.print("Connecting to MQTT ");
+        while (!mqttService->isConnected())
+        {
+            mqttService->connect();
+            delay(500);
+        }
+        Serial.println("\nMQTT connected!");
+        logNetworkInfo();
+
+        timeService.syncUtcTime();
+        if (timeService.isTimeSynced())
+        {
+            Serial.println("UTC time synchronized.");
+        }
+        else
+        {
+            Serial.println("UTC time not synchronized yet.");
+        }
+
+        if (device.hasUnassignedSensors())
+        {
+            Serial.println("One or more sensorIds are not assigned, registering device...");
+            Serial.printf("Free heap before registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+            mqttService->registerDevice(device);
+            Serial.println("Device registration initiated, waiting for sensor ID assignment...");
+            int retryCount = 0;
+            while (device.hasUnassignedSensors())
+            {
+                mqttService->getClient().loop();
+
+                const Device incomingDevice = mqttService->getDevice();
+                if (!Device::hasUnassignedSensors(incomingDevice))
+                {
+                    device = incomingDevice;
+                    Serial.println("Received assigned sensor IDs from config.");
+                    Serial.println("Updated device configuration:");
+                    Serial.println(device.toString(true));
+                    break;
+                }
+
+                delay(100);
+                retryCount++;
+                if (retryCount > 50)
+                { // Timeout after 5 seconds
+                    Serial.println("Timeout waiting for sensor ID assignment.");
+                    Serial.println("Re-registering device...");
+                    Serial.printf("Free heap before re-registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+                    mqttService->registerDevice(device);
+                    retryCount = 0;
+                }
+            }
+            Serial.printf("Free heap after registration: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+            Serial.println("Sensor ID assignment completed.");
+        }
+
+        // Temporarily release MQTT resources to free heap for OTA auth processing
+        // OTA needs heap for digest auth computation; we'll reconnect in the loop if needed
+        Serial.printf("Free heap before OTA: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
+
+        otaService.begin(otaUsername, otaPassword);
     }
     else
     {
         Serial.println("No WiFi credentials configured - OTA available but no MQTT");
+        otaService.begin(otaUsername, otaPassword);
     }
-    
+
+    setupP1Serial();
+
     Serial.println("Setup complete!");
+}
+
+void publishP1SensorValues()
+{
+    if (!p1SerialInitialized || otaService.isPrepared())
+    {
+        return;
+    }
+
+    if (!device.hasUnassignedSensors())
+    {
+        const unsigned long nowMs = millis();
+
+        // Read P1 data continuously to avoid dropping bytes from the serial buffer.
+        P1Datagram p1Datagram = P1Reader::readDatagram(p1Serial);
+
+        const bool hasValidP1Datagram = p1Datagram.getTimestamp().length() > 0 && p1Datagram.getVersionInfo() != 0;
+
+        if (hasValidP1Datagram)
+        {
+            // Map P1Datagram to SensorValues and publish
+            std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
+
+            for (const SensorValue &sv : sensorValues)
+            {
+                long id = sv.getSensorId();
+                float val = sv.getValue();
+
+                if (!shouldPublishSensorValue(id, val, nowMs))
+                {
+                    P1_DEBUG_PRINTF("P1 skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", id, val);
+                    continue;
+                }
+
+                publishSensorValue(id, sv.getTimestamp(), val);
+            }
+        }
+
+        // TEMP and VOLTAGE_LEVEL sensors are configured/registered in the same device model;
+        // publish them via the same dedup/repeat path, using device UTC time.
+        // Rate-limit ADC reads to once per second to avoid flooding MQTT with noise-induced micro-changes.
+        static unsigned long lastAuxSensorSampleMs = 0;
+        if (nowMs - lastAuxSensorSampleMs >= AUX_SENSOR_SAMPLE_INTERVAL_MS && timeService.ensureUtcTimeSynced())
+        {
+            lastAuxSensorSampleMs = nowMs;
+            const String timestamp = timeService.getUtcTimestamp();
+            const float temperature = TemperatureSensor::readTemperature();
+            const float batteryLevel = BatteryLevel::readBatteryLevel();
+
+            for (const Sensor &sensor : device.getSensors())
+            {
+                const long sensorId = sensor.getSensorId();
+                if (sensorId <= 0)
+                {
+                    continue;
+                }
+
+                float value = 0.0f;
+                bool supported = false;
+
+                if (sensor.getType() == SensorType::TEMP)
+                {
+                    value = temperature;
+                    supported = true;
+                }
+                else if (sensor.getType() == SensorType::VOLTAGE_LEVEL)
+                {
+                    value = batteryLevel;
+                    supported = true;
+                }
+
+                if (!supported)
+                {
+                    continue;
+                }
+
+                if (!shouldPublishSensorValue(sensorId, value, nowMs))
+                {
+                    P1_DEBUG_PRINTF("Aux skip (unchanged, <1 min): sensorId=%ld value=%.3f\r\n", sensorId, value);
+                    continue;
+                }
+
+                publishSensorValue(sensorId, timestamp, value);
+            }
+        }
+    }
 }
 
 void loop()
 {
-    // OTA update handling - call this first
-    ElegantOTA.loop();
+
+    otaService.loop();
     yield();
+
+    flashDataLineLedOnActivity(p1SerialInitialized && p1Serial.available() > 0);
 
     // Maintain WiFi connection
     if (WiFi.status() == WL_CONNECTED)
     {
+        if (!wifiAddressLogged)
+        {
+            wifiConnectionEstablished = true;
+            wifiAddressLogged = true;
+            Serial.printf("WiFi connected, DHCP IP: %s\r\n", WiFi.localIP().toString().c_str());
+            logNetworkInfo();
+        }
+
+        if (mqttService == nullptr)
+        {
+            return;
+        }
+
+        if (otaService.isPrepared())
+        {
+            return;
+        }
+
         // MQTT client loop - non-blocking
-        if (!mqttService.isConnected())
+        if (!mqttService->isConnected())
         {
-            mqttService.connect();
+            mqttService->connect();
         }
-        mqttService.getClient().loop();
+        mqttService->getClient().loop();
 
-        // Publish sensor data every 1 second
-        unsigned long now = millis();
-        if (now - lastMqttPublish >= 1000)
-        {
-            lastMqttPublish = now;
-
-            String timestamp = getTimestamp();
-            String payload = "{";
-            payload += "\"sensorId\":2,";
-            payload += "\"timestamp\":\"" + timestamp + "\",";
-            
-            if (INCLUDE_TEMPERATURE_SENSOR)
-            {
-                float temperature = TemperatureSensor::readTemperature();
-                if (temperature != lastSentTemperature)
-                {
-                    lastSentTemperature = temperature;
-                    payload += "\"value\":" + String(temperature, 2);
-                    payload += "}";
-                    mqttService.getClient().publish("sensor", payload.c_str());
-                }
-            }
-            else if (INCLUDE_BATTERY_LEVEL_SENSOR)
-            {
-                float batteryLevel = BatteryLevel::readBatteryLevel();
-                if (batteryLevel != lastSentBatteryLevel)
-                {
-                    lastSentBatteryLevel = batteryLevel;
-                    payload += "\"value\":" + String(batteryLevel, 2);
-                    payload += "}";
-                    mqttService.getClient().publish("sensor", payload.c_str());
-                }
-            }
-            else
-            {
-                payload += "\"value\": 0.0";
-                payload += "}";
-                mqttService.getClient().publish("sensor", payload.c_str());
-            }
-        }
+        publishP1SensorValues();
     }
     else
     {

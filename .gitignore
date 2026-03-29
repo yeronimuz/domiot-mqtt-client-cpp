@@ -2,3 +2,4 @@
 /.idea/
 data/config.json
 data/device.json
+.vscode

@@ -1,7 +1,8 @@
 {
   "wifi": {
     "ssid": "MYSSID",
-    "password": "thekey"
+    "password": "thekey",
+    "hostname": "domiot-p1-wifi"
   },
   "mqtt": {
     "host": "192.168.1.10",
@@ -9,5 +10,9 @@
     "user": "johndoe",
     "password": "secret",
     "client_id": "domiot-p1"
+  },
+  "ota": {
+    "username": "johndoe",
+    "password": "secret"
   }
 }

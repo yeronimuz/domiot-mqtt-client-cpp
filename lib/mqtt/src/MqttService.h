@@ -9,21 +9,27 @@
 class MqttService {
     private:    
         String _mqttServer;
+        u_short _mqttPort;
         String _mqttUser;
         String _mqttPassword;
+        String _clientId;
         WiFiClient* _wifiClient;
         PubSubClient _mqttClient;
 
         Device _device;
     public:
-        MqttService(String server = "", String user = "", String password = "", WiFiClient* wifiClient = nullptr) :
+        MqttService(String server = "", u_short port = 1883, String user = "", String password = "", String clientId = "", WiFiClient* wifiClient = nullptr) :
             _mqttServer(server),
+            _mqttPort(port),
             _mqttUser(user),
             _mqttPassword(password),
-            _wifiClient(wifiClient),
-            _mqttClient(*wifiClient)
+            _clientId(clientId),
+            _wifiClient(wifiClient)
         {
-            _mqttClient.setServer(_mqttServer.c_str(), 1883);
+            if (wifiClient != nullptr) {
+                _mqttClient.setClient(*wifiClient);
+            }
+            _mqttClient.setServer(_mqttServer.c_str(), _mqttPort);
             _mqttClient.setCallback([this](char* topic, byte* payload, unsigned int length) {
                 this->callback(topic, payload, length);
             });
@@ -31,7 +37,7 @@ class MqttService {
 
         void connect();
         boolean isConnected();
-        void registerDevice(Device device);
+        void registerDevice(const Device& device);
         void callback(char *topic, byte *payload, unsigned int length);
         Device& getDevice() { return _device; }
         PubSubClient &getClient() { return _mqttClient; }
