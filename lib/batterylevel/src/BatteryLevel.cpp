@@ -1,5 +1,6 @@
 #include "BatteryLevel.h"
 #include "constants.h"
+#include <SensorValue.h>
 #include <Arduino.h>
 #include <PubSubClient.h>
 
@@ -33,11 +34,12 @@ void BatteryLevel::publishSensorValue(
     }
 
     _lastSentBatteryLevel = batteryLevel;
-    String payload = "{";
-    payload += "\"sensorId\": " + String(sensorId) + ", ";
-    payload += "\"timestamp\": \"" + timestamp + "\", ";
-    payload += "\"value\": " + String(batteryLevel, 2);
-    payload += "}";
+
+    SensorValue sensorValue;
+    sensorValue.setSensorId(sensorId);
+    sensorValue.setTimestamp(timestamp);
+    sensorValue.setValue(batteryLevel);
+    String payload = sensorValue.toJson();
 
     mqttClient.publish(topic, reinterpret_cast<const uint8_t*>(payload.c_str()), payload.length());
 }

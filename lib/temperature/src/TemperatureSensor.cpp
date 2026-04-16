@@ -1,5 +1,6 @@
 #include "TemperatureSensor.h"
 #include "constants.h"
+#include <SensorValue.h>
 #include <Arduino.h>
 #include <PubSubClient.h>
 
@@ -40,11 +41,12 @@ void TemperatureSensor::publishSensorValue(
     }
 
     _lastSentTemperature = temperature;
-    String payload = "{";
-    payload += "\"sensorId\": " + String(sensorId) + ", ";
-    payload += "\"timestamp\": \"" + timestamp + "\", ";
-    payload += "\"value\": " + String(temperature, 2);
-    payload += "}";
+
+    SensorValue sensorValue;
+    sensorValue.setSensorId(sensorId);
+    sensorValue.setTimestamp(timestamp);
+    sensorValue.setValue(temperature);
+    String payload = sensorValue.toJson();
 
     mqttClient.publish(topic, reinterpret_cast<const uint8_t*>(payload.c_str()), payload.length());
 }
