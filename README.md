@@ -1,6 +1,6 @@
 # Domiot MQTT Client
 
-This project is the P1 smart meter reader implemented in C++. It conforms to the following requirements.
+This project is the P1 smart meter reader implemented in C++. It has to the following requirements.
 * The software runs on an ESP8266 device.
 * The software shall use MQTT to publish to 'register' and 'sensor' topics.
 * It shall support one device with multiple sensors.
@@ -14,8 +14,9 @@ This project is the P1 smart meter reader implemented in C++. It conforms to the
 	* The registration shall be done once during startup.
 * It shall read P1 datagrams from a smart meter on the Rx port.
 * It shall publish values for all sensors configured in the device.json.
-* It shall support either reading a battery level or a temperature on A0 analog input
-* It shall publish sensor values of all configured sensors at a one second rate
+* It shall support either reading a battery level or a temperature on A0 analog input.
+* It shall support reading temperature and humidity from a DHT11 sensor on D7 digital input.
+* It shall publish sensor values of all configured sensors at a one second rate.
 
 ## Future requirements
 * Update configuration at runtime
