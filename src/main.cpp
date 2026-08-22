@@ -15,6 +15,7 @@
 #include <map>
 #include "P1DatagramSensorValueMapper.h"
 #include <TimeService.h>
+#include <DHTTempHumidity.h>
 
 #define SENSOR_VALUE_TOPIC "sensor"
 #define WIFI_CONNECTION_RETRIES 50
@@ -34,6 +35,8 @@ OTAService otaService;
 
 MqttService *mqttService = nullptr;
 Device device;
+
+DHT dht11(DHT11_PIN, DHT11);
 
 unsigned long dataLineLedOffMillis = 0;
 unsigned long lastDataLineFlashMillis = 0;
@@ -154,6 +157,15 @@ void flashDataLineLedOnActivity(bool dataAvailable)
     {
         dataLineLedOffMillis = 0;
         digitalWrite(DATA_LINE_LED_PIN, DATA_LINE_LED_IDLE_LEVEL);
+    }
+}
+
+static void setupDHTTempHumiditySensor(Device& device)
+{
+    if (device.hasSensorOfType(SensorType::HUMID))
+    {
+        Serial.println("Initializing DHT temperature and humidity sensor...");
+        dht11.begin();
     }
 }
 
@@ -304,8 +316,6 @@ void setup()
             Serial.println("Sensor ID assignment completed.");
         }
 
-        // Temporarily release MQTT resources to free heap for OTA auth processing
-        // OTA needs heap for digest auth computation; we'll reconnect in the loop if needed
         Serial.printf("Free heap before OTA: %lu\r\n", static_cast<unsigned long>(ESP.getFreeHeap()));
 
         otaService.begin(otaUsername, otaPassword);
@@ -318,10 +328,12 @@ void setup()
 
     setupP1Serial();
 
+    setupDHTTempHumiditySensor(device);
+
     Serial.println("Setup complete!");
 }
 
-void publishP1SensorValues()
+void publishSensorValues()
 {
     if (!p1SerialInitialized || otaService.isPrepared())
     {
@@ -337,15 +349,15 @@ void publishP1SensorValues()
 
         const bool hasValidP1Datagram = p1Datagram.getTimestamp().length() > 0 && p1Datagram.getVersionInfo() != 0;
 
-        if (hasValidP1Datagram)
+        if (hasValidP1Datagram && device.hasSensorP1())
         {
             // Map P1Datagram to SensorValues and publish
             std::vector<SensorValue> sensorValues = P1DatagramSensorValueMapper::mapToSensorValues(device, p1Datagram);
 
-            for (const SensorValue &sv : sensorValues)
+            for (const SensorValue &sensorValue : sensorValues)
             {
-                long id = sv.getSensorId();
-                float val = sv.getValue();
+                long id = sensorValue.getSensorId();
+                float val = sensorValue.getValue();
 
                 if (!shouldPublishSensorValue(id, val, nowMs))
                 {
@@ -353,7 +365,7 @@ void publishP1SensorValues()
                     continue;
                 }
 
-                publishSensorValue(id, sv.getTimestamp(), val);
+                publishSensorValue(id, sensorValue.getTimestamp(), val);
             }
         }
 
@@ -364,29 +376,39 @@ void publishP1SensorValues()
         if (nowMs - lastAuxSensorSampleMs >= AUX_SENSOR_SAMPLE_INTERVAL_MS && timeService.ensureUtcTimeSynced())
         {
             lastAuxSensorSampleMs = nowMs;
-            const String timestamp = timeService.getUtcTimestamp();
-            const float temperature = TemperatureSensor::readTemperature();
-            const float batteryLevel = BatteryLevel::readBatteryLevel();
-
+            
             for (const Sensor &sensor : device.getSensors())
             {
+                const String timestamp = timeService.getUtcTimestamp();
                 const long sensorId = sensor.getSensorId();
                 if (sensorId <= 0)
                 {
                     continue;
                 }
-
+                
                 float value = 0.0f;
                 bool supported = false;
-
+                
                 if (sensor.getType() == SensorType::TEMP)
                 {
+                    const float temperature = TemperatureSensor::readTemperature();
                     value = temperature;
                     supported = true;
                 }
                 else if (sensor.getType() == SensorType::VOLTAGE_LEVEL)
                 {
+                    const float batteryLevel = BatteryLevel::readBatteryLevel();
                     value = batteryLevel;
+                    supported = true;
+                }
+                else if (sensor.getType() == SensorType::DHT11_TEMP)
+                {
+                    value = dht11.readTemperature();
+                    supported = true;
+                }
+                else if (sensor.getType() == SensorType::DHT11_HUMID)
+                {
+                    value = dht11.readHumidity();
                     supported = true;
                 }
 
@@ -443,7 +465,7 @@ void loop()
         }
         mqttService->getClient().loop();
 
-        publishP1SensorValues();
+        publishSensorValues();
     }
     else
     {

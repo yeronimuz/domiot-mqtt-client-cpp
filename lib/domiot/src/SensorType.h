@@ -21,6 +21,8 @@ public:
     static const SensorType STATUS;
     static const SensorType VOLTAGE_LEVEL;
     static const SensorType CURRENT_LEVEL;
+    static const SensorType DHT11_TEMP;
+    static const SensorType DHT11_HUMID;
 
     int getId() const { return _id; }
     String getDescription() const { return _description; }

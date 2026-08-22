@@ -17,12 +17,14 @@ const SensorType SensorType::HYDRO(12, "HYDRATION");
 const SensorType SensorType::STATUS(13, "STATUS");
 const SensorType SensorType::VOLTAGE_LEVEL(14, "VOLTAGE_LEVEL");
 const SensorType SensorType::CURRENT_LEVEL(15, "CURRENT_LEVEL");
+const SensorType SensorType::DHT11_TEMP(16, "DHT11_TEMP");
+const SensorType SensorType::DHT11_HUMID(17, "DHT11_HUMID");
 
 std::optional<SensorType> SensorType::getType(String typeStr) {
     static const SensorType* allTypes[] = {
         &NOT_USED, &POWER_PT1, &POWER_PT2, &POWER_CT1, &POWER_CT2,
         &POWER_AP, &POWER_AC, &GAS_METER, &TEMP, &HUMID,
-        &WATER, &GAS_SENSOR, &HYDRO, &STATUS, &VOLTAGE_LEVEL, &CURRENT_LEVEL
+        &WATER, &GAS_SENSOR, &HYDRO, &STATUS, &VOLTAGE_LEVEL, &CURRENT_LEVEL, &DHT11_TEMP, &DHT11_HUMID
     };
 
     for (const SensorType* st : allTypes) {

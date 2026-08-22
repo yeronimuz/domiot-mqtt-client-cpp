@@ -46,6 +46,8 @@ public:
     bool hasUnassignedSensors() const;
     String toString(bool pretty = false) const;
     static bool hasUnassignedSensors(const Device& device) { return device.hasUnassignedSensors(); }
+    bool hasSensorOfType(SensorType type) const;
+    bool hasSensorP1() const { return hasSensorOfType(SensorType::POWER_PT1) || hasSensorOfType(SensorType::POWER_PT2) || hasSensorOfType(SensorType::POWER_CT1) || hasSensorOfType(SensorType::POWER_CT2) || hasSensorOfType(SensorType::POWER_AP) || hasSensorOfType(SensorType::POWER_AC); }
 
     // Setters
     void setManufacturerId(const String& manufacturerId) { _manufacturerId = manufacturerId; }

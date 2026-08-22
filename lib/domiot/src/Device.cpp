@@ -297,6 +297,16 @@ bool Device::hasUnassignedSensors() const
     return false;
 }
 
+bool Device::hasSensorOfType(SensorType type) const
+{
+    for (const Sensor& sensor : _sensors) {
+        if (sensor.getType() == type) {
+            return true;
+        }
+    }
+    return false;
+}
+
 String Device::toString(bool pretty) const
 {
     JsonDocument doc;
